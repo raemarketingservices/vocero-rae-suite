@@ -1,24 +1,18 @@
-import {
-  BRAND_CYAN_ON_TILE,
-  BRAND_MARK_BODY,
-  BRAND_MARK_STROKE,
-  BRAND_MARK_TAIL,
-  isVoceroName,
-} from "./brand";
+import { isInstanceBrand } from "./brand";
+import { BRAND_LOGO_FAVICON_B64 } from "./brand-logo";
 import { resolveAccentSet, type Branding } from "./branding";
 
 /**
  * El icono de la pestaña, white-label.
  *
- * Toda instancia tiene uno **sin configurar nada**: si se llama Vocero, es el
- * logo de la marca (la "v" con remate cian sobre el mosaico azul, igual que en
- * vocerocrm.com); con otro nombre se dibuja la inicial sobre el acento. Una
- * agencia que despliega para su cliente puede subir el logo real y
- * reemplazarlo.
+ * Toda instancia tiene uno **sin configurar nada**: el logo circular de RAE
+ * Marketing Services; un cliente que rebautizó su espacio ve la inicial de su
+ * nombre sobre el acento que elija. Quien despliega para su cliente puede
+ * subir el logo real y reemplazarlo.
  *
  * Que exista un respaldo generado no es un adorno: sin él, quien no suba nada
- * se queda con el icono genérico del navegador, y con cinco instancias abiertas
- * en pestañas todas se ven iguales.
+ * se queda con el icono genérico del navegador, y con cinco espacios abiertos
+ * en pestañas todos se ven iguales.
  */
 
 /**
@@ -90,10 +84,10 @@ export function sniffFaviconMime(bytes: Uint8Array): FaviconMime | null {
   return null;
 }
 
-/** Inicial que se dibuja. Vacío o raro cae a la V de Vocero. */
+/** Inicial que se dibuja. Vacío o raro cae a la R de RAE. */
 export function faviconInitial(name: string): string {
   const c = name.trim().charAt(0).toUpperCase();
-  return c || "V";
+  return c || "R";
 }
 
 /**
@@ -102,8 +96,8 @@ export function faviconInitial(name: string): string {
  * el servidor.
  */
 export function generatedFaviconSvg(branding: Branding): string {
-  const { accent, hover, fg } = resolveAccentSet(branding.accent);
-  if (isVoceroName(branding.name)) return voceroFaviconSvg(accent, hover);
+  if (isInstanceBrand(branding.name)) return instanceFaviconSvg();
+  const { accent, fg } = resolveAccentSet(branding.accent);
   const letra = faviconInitial(branding.name)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;");
@@ -117,21 +111,15 @@ export function generatedFaviconSvg(branding: Branding): string {
 }
 
 /**
- * El favicon de vocerocrm.com, con el degradado en el acento de la instancia:
- * una instancia llamada Vocero pero con otro color sigue viendo SU color.
- * El trazo sale de `lib/brand`, el mismo que dibuja la barra lateral.
+ * El favicon de la plataforma: el logo circular de RAE con fondo transparente,
+ * embebido en base64 para que la ruta del icono no dependa de leer archivos en
+ * runtime (el contenedor sirve el SVG sin tocar disco).
  */
-function voceroFaviconSvg(from: string, to: string): string {
+function instanceFaviconSvg(): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">`,
-    `<defs><linearGradient id="g" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">`,
-    `<stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/>`,
-    `</linearGradient></defs>`,
-    `<rect width="64" height="64" rx="14" fill="url(#g)"/>`,
-    `<g transform="translate(5.6 5.6) scale(2.2)" fill="none" stroke-linecap="round">`,
-    `<path d="${BRAND_MARK_BODY}" stroke="#ffffff" stroke-width="${BRAND_MARK_STROKE}"/>`,
-    `<path d="${BRAND_MARK_TAIL}" stroke="${BRAND_CYAN_ON_TILE}" stroke-width="${BRAND_MARK_STROKE}"/>`,
-    `</g></svg>`,
+    `<image width="64" height="64" href="data:image/png;base64,${BRAND_LOGO_FAVICON_B64}"/>`,
+    `</svg>`,
   ].join("");
 }
 

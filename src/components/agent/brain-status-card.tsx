@@ -73,7 +73,7 @@ export function BrainStatusCard({
             id="embedded"
             icon={Sparkles}
             label="Agente incluido"
-            hint="El de Vocero, con el comportamiento de esta página."
+            hint="El incluido de la plataforma, con el comportamiento de esta página."
             view={embeddedView(status)}
           />
           <BrainRow

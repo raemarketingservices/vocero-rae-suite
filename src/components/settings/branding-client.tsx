@@ -124,7 +124,7 @@ export function BrandingClient({
               maxLength={30}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Vocero"
+              placeholder={DEFAULT_BRANDING.name}
               className="max-w-xs"
             />
           </div>

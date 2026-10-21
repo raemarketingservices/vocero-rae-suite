@@ -45,23 +45,28 @@ export type Branding = {
 };
 
 export const DEFAULT_BRANDING: Branding = {
-  name: "Vocero",
-  // El azul eléctrico de vocerocrm.com: la instancia recién instalada se ve
-  // igual que la landing. Una agencia lo cambia en Configuración → Marca.
-  accent: "#0d5bff",
+  name: "RAE Marketing Services",
+  // Azul principal de la guía de estilo RAE: la instancia recién instalada
+  // se ve con la marca de la plataforma. Un cliente lo cambia en
+  // Configuración → Marca.
+  accent: "#2d4aff",
   currency: DEFAULT_CURRENCY,
   favicon: null,
 };
 
 /**
- * Presets. El primero es la marca Vocero (valores exactos de la landing); los
+ * Presets. El primero es la marca RAE (valores de su guía de estilo); los
  * demás son los tonos sobrios del handoff Atlas, que siguen disponibles para
  * quien quiera un CRM más discreto.
  */
 export const ACCENT_PRESETS: Record<string, { label: string; set: AccentSet }> = {
-  "#0d5bff": {
-    label: "Azul Vocero",
-    set: { accent: "#0d5bff", hover: "#0a4de6", soft: "#d3e2ff", tint: "#ebf1ff", text: "#0038d8", fg: "#ffffff" },
+  "#2d4aff": {
+    label: "Azul RAE",
+    set: { accent: "#2d4aff", hover: "#263ed6", soft: "#d9deff", tint: "#f2f4ff", text: "#2035b8", fg: "#ffffff" },
+  },
+  "#4ea1ff": {
+    label: "Azul claro RAE",
+    set: { accent: "#4ea1ff", hover: "#3b8ce6", soft: "#e0eeff", tint: "#f2f8ff", text: "#2b6fc4", fg: "#0f2d6b" },
   },
   "#3f5972": {
     label: "Azul acero",
@@ -136,11 +141,11 @@ const DARK_BG: Rgb = { r: 0x1c, g: 0x26, b: 0x3c };
 
 /**
  * Fondo de referencia de la barra lateral (debe seguir a `--bg` de `.nav-dark`).
- * La barra es azul marino fijo en los dos temas, así que su acento se calcula
- * contra ella y no contra la página: si siguiera a DARK_BG, cambiar el tema
- * oscuro repintaría también la barra del tema claro.
+ * La barra es azul oscuro de la marca RAE fija en los dos temas, así que su
+ * acento se calcula contra ella y no contra la página: si siguiera a DARK_BG,
+ * cambiar el tema oscuro repintaría también la barra del tema claro.
  */
-const NAV_BG: Rgb = { r: 0x0b, g: 0x13, b: 0x27 };
+const NAV_BG: Rgb = { r: 0x0f, g: 0x2d, b: 0x6b };
 
 /** Tinta ENCIMA del acento: blanco solo si pasa AA (4.5:1), si no, casi negro. */
 const INK_ON_LIGHT = "#0f1419";
@@ -166,10 +171,10 @@ function inkPasses(base: Rgb): boolean {
  */
 type DarkRecipe = { bg: Rgb; minContrast: number; soft: number; tint: number; text: number };
 
-// Página oscura: con 3:1 el azul Vocero conserva la tinta blanca (4.5:1); el
-// tint más denso (0.78) hace que la fila seleccionada se vea sin leer el color
-// del texto (≥ 1.25:1 contra el fondo).
-const PAGE_DARK: DarkRecipe = { bg: DARK_BG, minContrast: 3, soft: 0.64, tint: 0.78, text: 0.34 };
+// Página oscura: con 3:1 el azul RAE conserva la tinta blanca (4.5:1); el
+// tint (0.72) hace que la fila seleccionada se vea sin leer el color del
+// texto (≥ 1.25:1 contra el fondo).
+const PAGE_DARK: DarkRecipe = { bg: DARK_BG, minContrast: 3, soft: 0.55, tint: 0.72, text: 0.34 };
 // Barra lateral: la receta de siempre, para que se vea igual que antes.
 const NAV_DARK: DarkRecipe = { bg: NAV_BG, minContrast: 3.5, soft: 0.72, tint: 0.88, text: 0.28 };
 

@@ -1,38 +1,32 @@
+import { DEFAULT_BRANDING } from "./branding";
+
 /**
- * La marca Vocero — la misma de vocerocrm.com.
+ * La marca de la instancia: RAE Marketing Services.
  *
- * Vive aquí, sin React, porque la usan dos mundos: los componentes (el trazo
+ * Vive aquí, sin React, porque la usan dos mundos: los componentes (el logo
  * del panel lateral y del login) y el servidor (el favicon generado que se
- * sirve como texto). Tener el dibujo en un solo sitio es lo que garantiza que
- * la pestaña y la barra lateral enseñen la MISMA "v".
- *
- * El trazo es una "v" caligráfica fluida con remate cian. El cuerpo se pinta
- * con `currentColor` (así hereda el acento white-label); el remate es una
- * constante de marca y NO se recalcula con el acento: es lo que la hace
- * reconocible.
+ * sirve como texto). Tener la ruta y el nombre en un solo sitio es lo que
+ * garantiza que la pestaña y la barra lateral enseñen la MISMA marca.
  */
 
-/** Cuerpo de la "v": se pinta con el color del contexto. */
-export const BRAND_MARK_BODY =
-  "M4 5c2 8 5 14.5 7.8 14.7 2.3.2 3.7-4.1 4.7-8.2";
+/** Logo circular servido desde `public/brand` (fondo transparente). */
+export const BRAND_LOGO_SRC = "/brand/rae-logo.png";
 
-/** Remate corto, siempre cian. */
-export const BRAND_MARK_TAIL = "M16.5 11.5c.8-3 2-5.5 4-6.1";
+/** Azul principal de la marca (guía de estilo RAE). */
+export const BRAND_BLUE = "#2d4aff";
 
-export const BRAND_MARK_STROKE = 3.4;
+/** Azul claro de la marca: remates y resplandores. */
+export const BRAND_BLUE_LIGHT = "#4ea1ff";
 
-/** Cian sobre fondos claros (texto azul al lado). */
-export const BRAND_CYAN = "#00c6f5";
-
-/** Cian sobre el mosaico azul: un punto más claro para que no se hunda. */
-export const BRAND_CYAN_ON_TILE = "#3fdcff";
+/** Azul oscuro de la marca: barra lateral y superficies profundas. */
+export const BRAND_BLUE_DARK = "#0f2d6b";
 
 /**
- * ¿Esta instancia se llama Vocero? Solo entonces se dibuja el logo: una
- * agencia que rebautizó el CRM para su cliente no debe ver la "v" de otro
- * producto en su barra lateral ni en su pestaña. El nombre por defecto es
- * "Vocero", así que una instancia sin configurar la ve de inmediato.
+ * ¿Esta organización conserva la marca de la instancia? Solo entonces se
+ * dibuja el logo de RAE: un cliente que rebautizó su espacio en
+ * Configuración → Marca ve su propio nombre con la inicial, no el logo de
+ * la plataforma.
  */
-export function isVoceroName(name: string): boolean {
-  return name.trim().toLowerCase() === "vocero";
+export function isInstanceBrand(name: string): boolean {
+  return name.trim().toLowerCase() === DEFAULT_BRANDING.name.toLowerCase();
 }

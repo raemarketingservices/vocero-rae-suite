@@ -26,7 +26,7 @@ export default function RegisterPage() {
     if (err) {
       if (err.status === 403) {
         setError(
-          "El registro está cerrado: esta instancia ya tiene su organización. Pide acceso al propietario."
+          "El registro está cerrado por el administrador de la plataforma. Pide acceso a tu ejecutivo."
         );
       } else if (err.status === 429) {
         setError("Demasiados intentos. Espera unos minutos.");
@@ -46,8 +46,8 @@ export default function RegisterPage() {
       <CardHeader>
         <CardTitle>Crear cuenta</CardTitle>
         <CardDescription>
-          El primer registro crea la organización de esta instancia y queda
-          como propietario.
+          Cada cuenta abre su propio espacio: tu bot de WhatsApp, tu base de
+          conocimiento y tu marca, separados del resto de clientes.
         </CardDescription>
       </CardHeader>
       <CardContent>

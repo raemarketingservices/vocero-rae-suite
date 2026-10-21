@@ -1,44 +1,32 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-/** FR-060/FR-081: registro cerrado tras la 1ª organización, salvo escape. */
-
-let orgCount = 0;
-
-vi.mock("@/lib/db", () => ({
-  getDb: () => ({
-    select: () => ({
-      from: () => Promise.resolve([{ n: orgCount }]),
-    }),
-  }),
-  schema: { organization: {} },
-}));
+/**
+ * Multi-tenant: el registro público está abierto por defecto (cada cuenta es
+ * un cliente con su propio espacio) y lo cierra ALLOW_SIGNUP=false.
+ */
 
 import { isPublicSignupAllowed } from "@/server/auth/registration";
 
 afterEach(() => vi.unstubAllEnvs());
 
-describe("registro público cerrado", () => {
-  it("instancia vacía → registro permitido (primer usuario)", async () => {
-    orgCount = 0;
+describe("registro público abierto (multi-tenant)", () => {
+  it("sin variable de escape → permitido", async () => {
     vi.stubEnv("ALLOW_SIGNUP", "");
     expect(await isPublicSignupAllowed()).toBe(true);
   });
 
-  it("ya existe una organización → cerrado", async () => {
-    orgCount = 1;
-    vi.stubEnv("ALLOW_SIGNUP", "");
+  it("ALLOW_SIGNUP=false → cerrado", async () => {
+    vi.stubEnv("ALLOW_SIGNUP", "false");
     expect(await isPublicSignupAllowed()).toBe(false);
   });
 
-  it("escape ALLOW_SIGNUP=true → permitido aunque exista organización", async () => {
-    orgCount = 1;
+  it("ALLOW_SIGNUP=true → permitido", async () => {
     vi.stubEnv("ALLOW_SIGNUP", "true");
     expect(await isPublicSignupAllowed()).toBe(true);
   });
 
-  it("otros valores del escape NO abren el registro", async () => {
-    orgCount = 1;
-    vi.stubEnv("ALLOW_SIGNUP", "1");
-    expect(await isPublicSignupAllowed()).toBe(false);
+  it("otros valores NO cierran el registro", async () => {
+    vi.stubEnv("ALLOW_SIGNUP", "0");
+    expect(await isPublicSignupAllowed()).toBe(true);
   });
 });

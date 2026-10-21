@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -11,32 +10,7 @@ import {
   resolveActiveOrganizationId,
 } from "@/server/auth/on-signup";
 import { isPublicSignupAllowed } from "@/server/auth/registration";
-
-/**
- * Contexto interno del proceso: permite que el alta de cuentas de equipo
- * (owner → API) atraviese el gate de registro cerrado. No es alcanzable
- * desde fuera: solo envuelve llamadas server-side.
- */
-const globalForSignup = globalThis as unknown as {
-  __voceroInternalSignup?: AsyncLocalStorage<boolean>;
-};
-
-// En globalThis: los módulos pueden evaluarse más de una vez (una por ruta en
-// dev) y todas las copias deben compartir el mismo contexto.
-function internalSignupContext(): AsyncLocalStorage<boolean> {
-  if (!globalForSignup.__voceroInternalSignup) {
-    globalForSignup.__voceroInternalSignup = new AsyncLocalStorage<boolean>();
-  }
-  return globalForSignup.__voceroInternalSignup;
-}
-
-export function runInternalSignup<T>(fn: () => Promise<T>): Promise<T> {
-  return internalSignupContext().run(true, fn);
-}
-
-function isInternalSignup(): boolean {
-  return internalSignupContext().getStore() === true;
-}
+import { isInternalSignup } from "@/server/auth/internal-signup";
 
 const RATE_LIMITED_PATHS = new Set(["/sign-in/email", "/sign-up/email"]);
 
@@ -75,12 +49,13 @@ function createAuth() {
             });
           }
         }
-        // Registro público cerrado tras la primera organización (FR-060).
+        // Registro público: abierto por defecto (multi-tenant), lo cierra
+        // ALLOW_SIGNUP=false.
         if (ctx.path === "/sign-up/email") {
           if (!isInternalSignup() && !(await isPublicSignupAllowed())) {
             throw new APIError("FORBIDDEN", {
               message:
-                "El registro está cerrado: esta instancia ya tiene su organización",
+                "El registro está cerrado por el administrador de la plataforma",
             });
           }
         }

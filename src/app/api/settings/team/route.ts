@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
-import { getAuth, runInternalSignup } from "@/lib/auth";
+import { getAuth } from "@/lib/auth";
+import { runInternalSignup } from "@/server/auth/internal-signup";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";

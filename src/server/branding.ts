@@ -37,11 +37,11 @@ export async function getBrandingContext(
         .from(schema.organization)
         .where(eq(schema.organization.id, organizationId))
         .limit(1)
-    : // Sin sesión (login, layout raíz): la única organización de la instancia.
-      await db
-        .select({ id: schema.organization.id, metadata: schema.organization.metadata })
-        .from(schema.organization)
-        .limit(1);
+    : [];
+  // Sin organización (login, registro, layout raíz): la marca de la
+  // INSTANCIA, no la de un cliente. En una plataforma multi-tenant las
+  // páginas públicas son de RAE; enseñar ahí la marca de un espacio
+  // cualquiera filtraría el nombre y el logo de un cliente a los demás.
   if (!rows[0]) return { organizationId: null, branding: DEFAULT_BRANDING };
   const meta = parseMetadata(rows[0].metadata);
   return {

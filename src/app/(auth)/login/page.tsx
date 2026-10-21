@@ -72,7 +72,7 @@ export default function LoginPage() {
           <p className="text-center text-sm text-muted-foreground">
             ¿Primera vez aquí?{" "}
             <Link href="/register" className="text-primary hover:underline">
-              Crear la cuenta inicial
+              Crea la cuenta de tu negocio
             </Link>
           </p>
         </form>

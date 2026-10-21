@@ -1,6 +1,8 @@
-import { count, eq, sql } from "drizzle-orm";
+import { customAlphabet } from "nanoid";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
+import { isInternalSignup } from "@/server/auth/internal-signup";
 
 /** Etapas sembradas del pipeline (US2). */
 const SEED_STAGES: { name: string; kind: "open" | "won" | "lost" }[] = [
@@ -11,30 +13,44 @@ const SEED_STAGES: { name: string; kind: "open" | "won" | "lost" }[] = [
   { name: "Perdido", kind: "lost" },
 ];
 
+const slugSuffix = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", 6);
+
 /**
- * Primer registro de la instancia: crea la organización, deja al usuario como
- * propietario y siembra pipeline + perfil del agente.
+ * Slug legible y único por espacio: la plataforma es multi-tenant, así que
+ * "principal" fijo chocaría en la segunda organización. El sufijo corto evita
+ * además que dos clientes con el mismo nombre compartan slug.
+ */
+function organizationSlug(userName: string): string {
+  const base =
+    userName
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "negocio";
+  return `${base}-${slugSuffix()}`;
+}
+
+/**
+ * Cada registro público crea el espacio del cliente: organización propia,
+ * usuario como propietario, pipeline y perfil del agente sembrados. Es lo que
+ * hace que cada cliente tenga su bot de WhatsApp y su base de conocimiento
+ * separados del resto.
  *
- * Solo actúa si NO existe ninguna organización (las cuentas de equipo las crea
- * el propietario y reciben su membresía explícita). Un advisory lock evita que
- * dos registros simultáneos en instancia vacía creen dos organizaciones.
+ * Las cuentas de equipo (owner → API) NO pasan por aquí: su membresía la
+ * inserta explícitamente quien las crea, y crearles un espacio propio las
+ * dejaría huérfanas del negocio al que entran.
  */
 export async function onUserCreated(userId: string, userName: string) {
+  if (isInternalSignup()) return;
   const db = getDb();
+  const orgId = newId("organization");
   await db.transaction(async (tx) => {
-    // Lock transaccional de "primer arranque" (clave arbitraria fija):
-    // dos registros simultáneos en instancia vacía → solo uno crea la org.
-    await tx.execute(sql`select pg_advisory_xact_lock(874201)`);
-    const [orgs] = await tx
-      .select({ n: count() })
-      .from(schema.organization);
-    if ((orgs?.n ?? 0) > 0) return;
-
-    const orgId = newId("organization");
     await tx.insert(schema.organization).values({
       id: orgId,
       name: userName ? `Negocio de ${userName}` : "Mi negocio",
-      slug: "principal",
+      slug: organizationSlug(userName),
     });
     await tx.insert(schema.member).values({
       id: newId("member"),

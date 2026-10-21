@@ -3,10 +3,11 @@
 @tailwind utilities;
 
 /*
-  Sistema de diseño de Vocero: la misma marca que vocerocrm.com dentro del CRM.
-  Papel frío (#f6f8fc), tinta azul marino, acento azul eléctrico con remate
-  cian, tipografía Archivo para la interfaz, Instrument Serif itálica para los
-  acentos editoriales e IBM Plex Mono para etiquetas y horas.
+  Sistema de diseño de RAE Marketing Services: la marca de la plataforma
+  dentro del CRM. Papel gris claro (#f2f4f8), tinta gris oscuro, acento azul
+  principal (#2d4aff) con remate azul claro, barra lateral en azul oscuro de
+  la marca, tipografía Montserrat para la interfaz, la script de la marca para
+  los acentos editoriales e IBM Plex Mono para etiquetas y horas.
 
   El tema activo se selecciona con `data-theme` en <html> (ver src/lib/theme.ts):
   el servidor lo escribe desde la cookie, así que no hay parpadeo.
@@ -17,42 +18,42 @@
   :root {
     color-scheme: light;
 
-    /* Neutros: papel frío de la landing */
+    /* Neutros: gris claro de la guía de estilo RAE */
     --bg: #ffffff;
-    --bg-subtle: #f6f8fc;
-    --bg-panel: #eef2f9;
-    --bg-hover: #e9eef8;
+    --bg-subtle: #f2f4f8;
+    --bg-panel: #eceff5;
+    --bg-hover: #e6eaf2;
     /* Lo que flota sobre la página: diálogos, cajones, menús. En claro es el
        mismo blanco de siempre; en oscuro se aclara para despegarse. */
     --bg-raised: #ffffff;
-    --text: #0a1730;
-    --text-2: #42506b;
-    --text-3: #8391aa;
-    --text-4: #aab4c8;
-    --border: #e8edf6;
-    --border-strong: #dde5f1;
+    --text: #333333;
+    --text-2: #5c6575;
+    --text-3: #8b95a5;
+    --text-4: #b2bac6;
+    --border: #e6eaf1;
+    --border-strong: #d8dee8;
     /* Chips dentro de una fila y la fila bajo el cursor. En claro coinciden
        con --bg y --bg-subtle; en oscuro NO: ahí --bg-subtle es más oscuro que
        --bg y un chip con fondo --bg desaparece dentro de la fila. */
     --chip-bg: #ffffff;
-    --row-hover: #f6f8fc;
+    --row-hover: #f2f4f8;
     /* 215 — Lo no hábil del calendario de Citas (ver .cal-off). */
-    --cal-off: #f6f8fc;
+    --cal-off: #f2f4f8;
 
     /* Chat: el cliente entra en verde WhatsApp, el CRM contesta en el acento */
-    --chat-bg: #f6f8fc;
+    --chat-bg: #f2f4f8;
     --bubble-in: #eaf7ef;
     --bubble-in-border: #d7eede;
     --bubble-out: var(--accent-tint);
     --bubble-out-border: var(--accent-soft);
     --bubble-out-text: var(--text);
 
-    /* Acento (default: azul Vocero; el white-label lo sobreescribe) */
-    --accent: #0d5bff;
-    --accent-hover: #0a4de6;
-    --accent-soft: #d3e2ff;
-    --accent-tint: #ebf1ff;
-    --accent-text: #0038d8;
+    /* Acento (default: azul principal RAE; el white-label lo sobreescribe) */
+    --accent: #2d4aff;
+    --accent-hover: #263ed6;
+    --accent-soft: #d9deff;
+    --accent-tint: #f2f4ff;
+    --accent-text: #2035b8;
     --accent-fg: #ffffff;
     /* El acento como TINTA (una hora, un enlace) y como anillo de foco. En
        claro son el acento mismo; en oscuro, sus variantes aclaradas: el
@@ -80,10 +81,10 @@
     --danger-text: #b73535;
     --danger-fg: #ffffff;
 
-    --info: #0d5bff;
-    --info-tint: #ebf1ff;
-    --info-soft: #d3e2ff;
-    --info-text: #0038d8;
+    --info: #2d4aff;
+    --info-tint: #f2f4ff;
+    --info-soft: #d9deff;
+    --info-text: #2035b8;
 
     /* Superficies auxiliares */
     --overlay: rgba(4, 16, 46, 0.55);
@@ -140,16 +141,18 @@
     --bubble-in: #173d2c;
     --bubble-in-border: #2a5e45;
 
-    /* Acento: respaldo con el azul Vocero calculado para este fondo; el
+    /* Acento: respaldo con el azul RAE calculado para este fondo; el
        white-label lo recalcula (ver resolveAccentSet en lib/branding). */
-    --accent: #256bff;
-    --accent-hover: #4883ff;
-    --accent-soft: #1f3f82;
-    --accent-tint: #1e3567;
-    --accent-text: #6f9eff;
+    --accent: #425cff;
+    --accent-hover: #6076ff;
+    --accent-soft: #2d3e94;
+    --accent-tint: #273573;
+    --accent-text: #8f9eff;
     --accent-fg: #ffffff;
     --accent-ink: var(--accent-text);
-    --ring: var(--accent-hover);
+    /* El anillo de foco en oscuro es la tinta aclarada: el relleno sólido no
+       llega a 3:1 contra el panel, y el anillo es componente de interfaz. */
+    --ring: var(--accent-text);
     --accent-veil: rgba(0, 0, 0, 0.22);
 
     /* Estado sobre fondo oscuro: el tono puro oscurecido (no mezclado con el
@@ -186,11 +189,11 @@
   }
 
   /*
-    Sidebar: azul marino fijo, sin importar el tema claro/oscuro del resto de
-    la app (como el lateral de la landing). Redeclara sus neutros directamente
-    sobre el `<aside>` (ver AppNav) y la barra superior del teléfono, para que
-    las clases que ya usan (bg-subtle, border, text-2, text-3,
-    hover:bg-accent…) hereden estos valores en vez de los de `:root`.
+    Sidebar: azul oscuro de la marca RAE fijo, sin importar el tema claro/
+    oscuro del resto de la app. Redeclara sus neutros directamente sobre el
+    `<aside>` (ver AppNav) y la barra superior del teléfono, para que las
+    clases que ya usan (bg-subtle, border, text-2, text-3, hover:bg-accent…)
+    hereden estos valores en vez de los de `:root`.
 
     Son SUS valores, no una copia de los del tema oscuro: la página oscura
     vive un escalón arriba (≥ 1.25:1) para que el bicolor no desaparezca, y la
@@ -200,19 +203,19 @@
   */
   .nav-dark {
     color-scheme: dark;
-    --bg: #0b1327;
-    --bg-subtle: #070e20;
-    --bg-panel: #131f3d;
-    --bg-raised: #131f3d;
-    --bg-hover: #182750;
-    --text: #e8eefc;
-    --text-2: #a9b8dc;
-    --text-3: #7688b0;
-    --text-4: #55648a;
-    --border: #263866;
-    --border-strong: #34498a;
-    --chip-bg: #142040;
-    --row-hover: #111b36;
+    --bg: #0f2d6b;
+    --bg-subtle: #030b1f;
+    --bg-panel: #16387c;
+    --bg-raised: #16387c;
+    --bg-hover: #1b4291;
+    --text: #eaf0ff;
+    --text-2: #bccbec;
+    --text-3: #8fa3cf;
+    --text-4: #6d81b0;
+    --border: #2b4f9e;
+    --border-strong: #3d63b4;
+    --chip-bg: #143373;
+    --row-hover: #123170;
     --accent-ink: var(--accent-text);
     --ring: var(--accent);
     --shadow-pop: 0 30px 80px -20px rgba(0, 0, 0, 0.75),
@@ -291,7 +294,7 @@
     height: 460px;
     left: -140px;
     bottom: -180px;
-    background: radial-gradient(circle, rgba(0, 198, 245, 0.14), transparent 65%);
+    background: radial-gradient(circle, rgba(78, 161, 255, 0.16), transparent 65%);
     animation: brand-drift 18s ease-in-out infinite alternate-reverse;
   }
   @keyframes brand-drift {

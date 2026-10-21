@@ -44,3 +44,6 @@ Thumbs.db
 .dev-media/
 # Capturas y salidas de los self-tests (p. ej. scripts/e2e-responsive.mjs)
 scratch/
+
+# derivado de scripts/gen-brand-assets.cjs
+public/brand/rae-logo-64.b64
