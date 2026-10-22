@@ -381,8 +381,10 @@ solas al arrancar.
 
 ## Conexión del número de WhatsApp
 
-Vocero **consume** un token de la WhatsApp Cloud API — no implementa el
-Embedded Signup. Hay dos formas de obtenerlo:
+Vocero **consume** un token de la WhatsApp Cloud API. Hay tres formas de
+obtenerlo: que el negocio te lo pegue (modo directo), que lo traiga tu agencia
+(modo agencia) o que el negocio lo autorice dentro de Vocero (registro
+insertado, opcional y apagado por defecto).
 
 ### Modo directo (el negocio tiene su propia app de Meta)
 
@@ -405,6 +407,39 @@ Embedded Signup. Hay dos formas de obtenerlo:
    plantillas). Es una sola vez por app.
 5. Recomendado: agrega `META_APP_SECRET` (App Secret de tu app) a las
    variables de la instancia para la verificación de firma de cada evento.
+
+### Registro insertado (Embedded Signup) — el negocio se conecta solo
+
+Enciende esta superficie solo con las tres variables a la vez; con cualquiera
+vacía el botón no aparece y el POST responde 404 (la instancia sigue en modo
+directo):
+
+```ini
+META_APP_ID=                       # Panel de apps → Configuración básica
+META_APP_SECRET=                   # el mismo de la firma del webhook
+META_EMBEDDED_SIGNUP_CONFIG_ID=    # WhatsApp → Configuration → crear configuración
+```
+
+Qué pasa en pantalla: **Configuración → WhatsApp → «Conectar con Facebook»**.
+Meta abre su ventana, el negocio entra con SU cuenta, elige o crea SU número y
+autoriza. El navegador devuelve un código de un solo uso; el CRM lo cambia por
+el token del usuario del sistema de ESA cuenta con
+`GET /oauth/access_token` (el secreto de la app viaja en esa query, nunca al
+navegador), lo cifra con `ENCRYPTION_KEY` en `meta_credentials` y registra el
+webhook del número — el mismo camino que el modo directo.
+
+Consecuencia de diseño: **cada organización tiene su propio WABA, su propio
+token y su propio método de pago**. Los mensajes se cobran en la cuenta del
+negocio, no en la tuya. Un número = una organización (el webhook enruta por
+Phone Number ID), así que varias tiendas comparten instancia y URL de webhook
+pero nunca credenciales.
+
+Requisitos en Meta (una sola vez, en TU app de Tech Provider): producto WhatsApp
+con **acceso avanzado** y los permisos `whatsapp_business_management`,
+`whatsapp_business_messaging` y `business_management`; **Facebook Login for
+Business** activado; y la URI de redirección OAuth que coincida con
+`APP_BASE_URL`. Si la cuenta autorizada tiene varios números, el CRM devuelve la
+lista y el cliente elige dentro de la ventana de Meta.
 
 ### Modo agencia (Tech Provider) — para agencias
 

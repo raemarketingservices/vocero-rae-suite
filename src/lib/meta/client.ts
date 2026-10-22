@@ -42,6 +42,12 @@ export async function graphRequest<T>(
     method?: "GET" | "POST" | "DELETE";
     token: string;
     body?: unknown;
+    /**
+     * Llamada sin credencial en el header: el intercambio del código del
+     * registro insertado se autentica con el secreto de la app en la query, no
+     * con un Bearer. Es la excepción, no un camino genérico.
+     */
+    anonymous?: boolean;
   }
 ): Promise<T> {
   const env = getEnv();
@@ -51,7 +57,7 @@ export async function graphRequest<T>(
     res = await fetch(url, {
       method: opts.method ?? "GET",
       headers: {
-        Authorization: `Bearer ${opts.token}`,
+        ...(opts.anonymous ? {} : { Authorization: `Bearer ${opts.token}` }),
         ...(opts.body !== undefined
           ? { "Content-Type": "application/json" }
           : {}),

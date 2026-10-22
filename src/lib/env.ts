@@ -20,6 +20,12 @@ export const envSchema = z.object({
     }),
   META_WEBHOOK_VERIFY_TOKEN: z.string().min(8),
   META_APP_SECRET: z.string().optional(),
+  // Registro insertado (Embedded Signup) de Meta: cada negocio autoriza desde
+  // su propia cuenta y nosotros recibimos un token de su usuario del sistema.
+  // Las tres variables tienen que estar para que la superficie exista; con
+  // cualquiera falta, el CRM sigue en modo directo y el botón no se muestra.
+  META_APP_ID: z.string().optional(),
+  META_EMBEDDED_SIGNUP_CONFIG_ID: z.string().optional(),
   META_GRAPH_API_VERSION: z.string().default("v25.0"),
   META_GRAPH_BASE_URL: z.string().url().default("https://graph.facebook.com"),
   OPENROUTER_API_TOKEN: z.string().optional(),
