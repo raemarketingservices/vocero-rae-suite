@@ -54,6 +54,11 @@ export const envSchema = z.object({
     .default("https://www.googleapis.com/calendar/v3"),
   GOOGLE_OAUTH_BASE_URL: z.string().url().default("https://oauth2.googleapis.com"),
   ALLOW_SIGNUP: z.string().optional(),
+  // Panel de la plataforma RAE: correos separados por coma que ven TODAS las
+  // tiendas y pueden entrar a configurar el bot de cualquiera de ellas. Sin
+  // esta variable el panel no existe (sus rutas responden 404) y nadie puede
+  // ponerse en modo gestión. Ej.: PLATFORM_ADMIN_EMAILS=rae@ejemplo.com
+  PLATFORM_ADMIN_EMAILS: z.string().optional(),
   AGENT_COALESCE_MS: z.coerce.number().int().min(0).default(6000),
   WA_MOCK_ENABLED: z.string().optional(),
   // API key de un cerebro externo que conduzca la conversación por /api/bot/*.

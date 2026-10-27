@@ -64,6 +64,20 @@ describe("barra lateral agrupada", () => {
     expect(isNavActive("/settings/ai", "/settings")).toBe(true);
     expect(isNavActive("/settings/ai", "/agent")).toBe(false);
   });
+
+  it("el panel de la plataforma solo existe si el servidor dice que lo es", () => {
+    const hrefs = (groups: { items: { href: string }[] }[]) =>
+      groups.flatMap((g) => g.items.map((i) => i.href));
+    expect(hrefs(appNavGroups({ role: "owner" }))).not.toContain("/panel");
+    expect(hrefs(appNavGroups({ role: "member" }))).not.toContain("/panel");
+    expect(hrefs(appNavGroups({ role: "owner", panel: true }))).toContain("/panel");
+    // Va al final y con su propio encabezado: no es el trabajo del día.
+    const grupos = appNavGroups({ role: "owner", panel: true });
+    expect(grupos.at(-1)).toMatchObject({
+      title: "Plataforma",
+      items: [{ href: "/panel", label: "Panel" }],
+    });
+  });
 });
 
 describe("ajustes en tres secciones", () => {

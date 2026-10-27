@@ -28,6 +28,7 @@ export function AppShell({
   theme,
   commit,
   agenda = false,
+  panel = false,
   aviso = null,
   children,
 }: {
@@ -39,6 +40,8 @@ export function AppShell({
   commit?: ResolvedCommit;
   /** 015 — ¿esta instancia tiene agenda? Lo decide el servidor. */
   agenda?: boolean;
+  /** ¿Quien mira es admin de la plataforma? Lo decide el servidor, por correo. */
+  panel?: boolean;
   /**
    * Franja de aviso por encima de TODA la aplicación (#85).
    *
@@ -86,6 +89,7 @@ export function AppShell({
         role={role}
         theme={theme}
         agenda={agenda}
+        panel={panel}
         open={navOpen}
         onClose={() => setNavOpen(false)}
       />

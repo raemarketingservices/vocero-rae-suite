@@ -44,6 +44,7 @@ export function AppNav({
   theme,
   commit,
   agenda = false,
+  panel = false,
   open = false,
   onClose,
 }: {
@@ -63,6 +64,11 @@ export function AppNav({
    * todavía debe ver la entrada igual.
    */
   agenda?: boolean;
+  /**
+   * Entrada "Panel" para un admin de la plataforma. La decide el servidor
+   * mirando `PLATFORM_ADMIN_EMAILS`: el nav de cliente no lee entorno ni correo.
+   */
+  panel?: boolean;
   /** Solo aplica por debajo de `lg`: en escritorio el lateral es fijo. */
   open?: boolean;
   onClose?: () => void;
@@ -92,7 +98,7 @@ export function AppNav({
   const version = commit ?? { commit: BUILD_COMMIT, verified: BUILD_COMMIT !== "" };
   // #87 — Qué hay en el menú y en qué grupo lo decide `appNavGroups`; aquí
   // solo se pinta.
-  const groups = appNavGroups({ agenda, role });
+  const groups = appNavGroups({ agenda, role, panel });
 
   function renderItem(item: NavItem) {
     const active = isNavActive(pathname, item.href);

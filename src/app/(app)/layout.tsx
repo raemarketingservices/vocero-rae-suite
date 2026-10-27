@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
 import { getSessionOrNull } from "@/lib/auth/session";
+import { esAdminDePlataforma } from "@/lib/auth/platform";
 import { normalizeThemePreference, THEME_COOKIE } from "@/lib/theme";
 import { getBranding } from "@/server/branding";
 import { AppShell } from "@/components/app-shell";
@@ -9,6 +10,7 @@ import { resolveCommit } from "@/lib/version";
 import { agendaEnabled } from "@/server/agenda/flag";
 import { avisoIaDe } from "@/server/ai/aviso";
 import { AvisoIaBanner } from "@/components/avisos/aviso-ia";
+import { BannerGestion } from "@/components/panel/banner-gestion";
 
 export default async function AppLayout({
   children,
@@ -26,6 +28,9 @@ export default async function AppLayout({
   // bot roto. Se resuelve en el servidor y en el layout para que se vea desde
   // CUALQUIER pantalla, no solo desde el panel de un contacto (#85).
   const aviso = await avisoIaDe(session.organizationId);
+  // El correo ya está en la sesión consultada arriba: preguntar si manda en
+  // toda la plataforma no cuesta otra llamada, y el nav no lee entorno.
+  const esAdmin = esAdminDePlataforma(authSession?.user.email);
 
   return (
     <AppShell
@@ -41,7 +46,20 @@ export default async function AppLayout({
       // prop, igual que los canales de la Bandeja. El nav es un componente de
       // cliente: no puede —ni debe— leer variables de entorno.
       agenda={agendaEnabled()}
-      aviso={<AvisoIaBanner aviso={aviso} />}
+      panel={esAdmin}
+      aviso={
+        <>
+          {/* El orden importa: primero de qué tienda se trata, después si el
+              agente de esa tienda puede pensar. */}
+          {session.gestion ? (
+            <BannerGestion
+              nombre={session.gestion.nombre}
+              organizationId={session.gestion.organizationId}
+            />
+          ) : null}
+          <AvisoIaBanner aviso={aviso} />
+        </>
+      }
     >
       {children}
     </AppShell>

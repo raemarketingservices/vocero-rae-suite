@@ -1,11 +1,20 @@
 import { headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
+import { orgEnGestion, type OrgEnGestion } from "@/lib/auth/platform";
 import { resolveMembership } from "@/server/auth/on-signup";
 
 export type SessionContext = {
   userId: string;
   organizationId: string;
   role: string;
+  /**
+   * Tienda que un admin de plataforma eligió en el panel, o `null`. Cuando
+   * existe, `organizationId` es ESA tienda y `role` es `owner`: el resto de la
+   * app (que se scopea por `session.organizationId`) no necesita saber que
+   * quien mira es el de RAE, y por eso funciona sin tocar las pantallas de
+   * Ajustes de nadie.
+   */
+  gestion: OrgEnGestion | null;
 };
 
 export class UnauthorizedError extends Error {
@@ -23,6 +32,17 @@ export async function requireSession(): Promise<SessionContext> {
   const auth = getAuth();
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new UnauthorizedError();
+  // La cookie de gestión solo la decide `orgEnGestion()`, que exige que el
+  // correo esté en PLATFORM_ADMIN_EMAILS: puesta a mano por un cliente, no abre nada.
+  const gestion = await orgEnGestion(session.user.email);
+  if (gestion) {
+    return {
+      userId: session.user.id,
+      organizationId: gestion.organizationId,
+      role: "owner",
+      gestion,
+    };
+  }
   // La sesión puede crearse antes de que la membresía exista (registro
   // inicial) — la membresía en BD es la fuente de verdad de org + rol.
   const membership = await resolveMembership(session.user.id);
@@ -33,6 +53,7 @@ export async function requireSession(): Promise<SessionContext> {
     userId: session.user.id,
     organizationId: membership.organizationId,
     role: membership.role,
+    gestion: null,
   };
 }
 

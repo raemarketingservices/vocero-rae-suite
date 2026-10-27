@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  hayAdminDePlataforma,
+  sesionEsAdminPlataforma,
+} from "@/lib/auth/platform";
 import { requireSession, UnauthorizedError, type SessionContext } from "@/lib/auth/session";
 
 /** Respuesta de error estándar de la API interna (contrato api.md). */
@@ -31,6 +35,37 @@ export function withAuth<Args extends unknown[]>(
       return await handler(session, ...args);
     } catch (err) {
       console.error("[api] error no controlado:", err);
+      return apiError(500, "internal", "Error interno");
+    }
+  };
+}
+
+/**
+ * Envuelve una ruta del panel de la plataforma.
+ *
+ * Sin `PLATFORM_ADMIN_EMAILS`, o sin que quien llama esté en la lista, la
+ * superficie responde 404 y no 403: para una instancia que no tiene admin de
+ * plataforma, ese endpoint simplemente no existe (misma regla que `AGENDA`,
+ * `CHANNELS` y `ATRIBUCION`).
+ */
+export function withPanel<Args extends unknown[]>(
+  handler: (
+    admin: { userId: string; email: string },
+    ...args: Args
+  ) => Promise<Response>
+): (...args: Args) => Promise<Response> {
+  return async (...args: Args) => {
+    let admin: { userId: string; email: string } | null = null;
+    try {
+      if (hayAdminDePlataforma()) admin = await sesionEsAdminPlataforma();
+    } catch (err) {
+      console.error("[panel] error resolviendo la sesión:", err);
+    }
+    if (!admin) return new Response(null, { status: 404 });
+    try {
+      return await handler(admin, ...args);
+    } catch (err) {
+      console.error("[panel] error no controlado:", err);
       return apiError(500, "internal", "Error interno");
     }
   };

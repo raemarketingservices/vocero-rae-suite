@@ -1,4 +1,5 @@
 import {
+  Building2,
   CalendarDays,
   ChartColumn,
   FlaskConical,
@@ -50,11 +51,18 @@ export const SETTINGS_ITEM: NavItem = {
 export function appNavGroups({
   agenda = false,
   role,
+  panel = false,
 }: {
   /** 015 — "Citas" solo existe si esta instancia encendió la agenda. */
   agenda?: boolean;
   /** #86 — La guía de inicio solo para quien puede configurar. */
   role?: string | null;
+  /**
+   * Panel de la plataforma: solo para un correo de `PLATFORM_ADMIN_EMAILS`, y
+   * lo decide el servidor. No es un rol de `member`: quien mira todas las
+   * tiendas sigue siendo `owner` de la suya.
+   */
+  panel?: boolean;
 }): NavGroup[] {
   const trabajo: NavItem[] = [
     { href: "/inbox", label: "Bandeja", icon: Inbox, badge: true },
@@ -75,12 +83,21 @@ export function appNavGroups({
     { href: "/lab", label: "Laboratorio", icon: FlaskConical }
   );
 
-  return [
+  const grupos: NavGroup[] = [
     { title: "Trabajo", items: trabajo },
     { title: "Agente", items: agente },
     // 019 — Se mide al final: primero se atiende y se organiza.
     { items: [{ href: "/results", label: "Resultados", icon: ChartColumn }] },
   ];
+  // Después de todo: no es el trabajo del día de nadie, es la puerta a las
+  // DEMÁS tiendas, y un cliente que no es admin de la plataforma no la ve.
+  if (panel) {
+    grupos.push({
+      title: "Plataforma",
+      items: [{ href: "/panel", label: "Panel", icon: Building2 }],
+    });
+  }
+  return grupos;
 }
 
 export type SettingsLink = { href: string; label: string };
