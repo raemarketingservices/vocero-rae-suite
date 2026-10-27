@@ -92,4 +92,21 @@ describe("la raíz", () => {
     guideFirst.mockResolvedValue(false);
     await expect(Home()).rejects.toThrow("redirect:/inbox");
   });
+
+  it("el admin de la plataforma va al panel, sin pasar por la guía", async () => {
+    // Su cuenta es dueña de una tienda, pero esa tienda no es SUYA: mandarlo a
+    // la Bandeja era hacerle creer que el panel no existe.
+    getSessionOrNull.mockResolvedValue({ ...owner, adminDePlataforma: true });
+    await expect(Home()).rejects.toThrow("redirect:/panel");
+    expect(guideFirst).not.toHaveBeenCalled();
+  });
+
+  it("en modo gestión vuelve a la Bandeja de la tienda que eligió", async () => {
+    getSessionOrNull.mockResolvedValue({
+      ...owner,
+      adminDePlataforma: true,
+      gestion: { organizationId: "org_otra", nombre: "Otra tienda" },
+    });
+    await expect(Home()).rejects.toThrow("redirect:/inbox");
+  });
 });

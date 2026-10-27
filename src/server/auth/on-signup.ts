@@ -33,24 +33,28 @@ function organizationSlug(userName: string): string {
 }
 
 /**
- * Cada registro público crea el espacio del cliente: organización propia,
- * usuario como propietario, pipeline y perfil del agente sembrados. Es lo que
- * hace que cada cliente tenga su bot de WhatsApp y su base de conocimiento
- * separados del resto.
+ * El espacio de un cliente: organización propia, él como propietario, pipeline
+ * y perfil del agente sembrados. Es lo que hace que cada tienda tenga su bot de
+ * WhatsApp y su base de conocimiento separados del resto.
  *
- * Las cuentas de equipo (owner → API) NO pasan por aquí: su membresía la
- * inserta explícitamente quien las crea, y crearles un espacio propio las
- * dejaría huérfanas del negocio al que entran.
+ * Lo llaman dos caminos: el registro público (por `onUserCreated`, gancho de
+ * Better Auth) y el alta desde el panel de la plataforma, que crea la cuenta
+ * por dentro —por eso recibe el nombre del negocio en vez de inventarlo a
+ * partir del usuario.
  */
-export async function onUserCreated(userId: string, userName: string) {
-  if (isInternalSignup()) return;
+export async function crearEspacioCliente(
+  userId: string,
+  userName: string,
+  nombreNegocio?: string
+): Promise<string> {
   const db = getDb();
   const orgId = newId("organization");
+  const nombre = nombreNegocio?.trim() || (userName ? `Negocio de ${userName}` : "Mi negocio");
   await db.transaction(async (tx) => {
     await tx.insert(schema.organization).values({
       id: orgId,
-      name: userName ? `Negocio de ${userName}` : "Mi negocio",
-      slug: organizationSlug(userName),
+      name: nombre,
+      slug: organizationSlug(nombre),
     });
     await tx.insert(schema.member).values({
       id: newId("member"),
@@ -72,6 +76,19 @@ export async function onUserCreated(userId: string, userName: string) {
       organizationId: orgId,
     });
   });
+  return orgId;
+}
+
+/**
+ * Cada registro público crea el espacio del cliente (US-).
+ *
+ * Las cuentas de equipo (owner → API) NO pasan por aquí: su membresía la
+ * inserta explícitamente quien las crea, y crearles un espacio propio las
+ * dejaría huérfanas del negocio al que entran.
+ */
+export async function onUserCreated(userId: string, userName: string) {
+  if (isInternalSignup()) return;
+  await crearEspacioCliente(userId, userName);
 }
 
 /** Organización activa de un usuario (su primera membresía). */

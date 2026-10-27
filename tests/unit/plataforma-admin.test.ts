@@ -6,6 +6,7 @@ import {
   hayAdminDePlataforma,
   parseAdminEmails,
 } from "@/lib/auth/platform";
+import { generarContrasena } from "@/server/platform/tiendas";
 
 /**
  * El admin de la plataforma es la única puerta entre RAE y los datos de todos
@@ -89,11 +90,46 @@ describe("la cookie de gestión no es una llave", () => {
   });
 
   it("las rutas del panel pasan por withPanel, no por withAuth", () => {
-    const ruta = readFileSync(
-      path.join(RAIZ, "src", "app", "api", "panel", "gestion", "route.ts"),
+    for (const ruta of ["gestion", "tiendas"]) {
+      const fuente = readFileSync(
+        path.join(RAIZ, "src", "app", "api", "panel", ruta, "route.ts"),
+        "utf8"
+      );
+      expect(fuente).toContain("withPanel");
+      expect(fuente).not.toContain("withAuth");
+    }
+  });
+
+  it("el alta desde el panel usa el camino interno y no reabre el registro", () => {
+    const fuente = readFileSync(
+      path.join(RAIZ, "src", "server", "platform", "tiendas.ts"),
       "utf8"
     );
-    expect(ruta).toContain("withPanel");
-    expect(ruta).not.toContain("withAuth");
+    // Sin `runInternalSignup`, con ALLOW_SIGNUP=false el propio alta se
+    // rechazaría a sí misma; y reabrir el flag sería abrirle la puerta a todo
+    // el mundo para poder dar de alta a un cliente.
+    expect(fuente).toContain("runInternalSignup");
+    expect(fuente).not.toContain("process.env.ALLOW_SIGNUP");
+  });
+
+  it("el admin cae en el panel antes de pasar por la guía de inicio", () => {
+    const fuente = readFileSync(path.join(RAIZ, "src", "app", "page.tsx"), "utf8");
+    expect(fuente).toContain("session.adminDePlataforma");
+    expect(fuente.indexOf('redirect("/panel")')).toBeLessThan(
+      fuente.indexOf("guideFirst(session)")
+    );
+  });
+});
+
+describe("contraseña inicial de una tienda nueva", () => {
+  it("es sufriente, legible y distinta cada vez", () => {
+    const p1 = generarContrasena();
+    const p2 = generarContrasena();
+    // 8 es el mínimo que acepta Better Auth; menos sería un alta que no puede
+    // cambiar la contraseña nunca.
+    expect(p1.length).toBeGreaterThanOrEqual(8);
+    expect(p1).not.toBe(p2);
+    // Sin caracteres que se confunden dictados por teléfono (0/O, 1/l/I).
+    expect(p1).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789]+$/);
   });
 });

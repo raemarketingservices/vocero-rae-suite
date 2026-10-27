@@ -1,6 +1,10 @@
 import { headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
-import { orgEnGestion, type OrgEnGestion } from "@/lib/auth/platform";
+import {
+  esAdminDePlataforma,
+  orgEnGestion,
+  type OrgEnGestion,
+} from "@/lib/auth/platform";
 import { resolveMembership } from "@/server/auth/on-signup";
 
 export type SessionContext = {
@@ -15,6 +19,13 @@ export type SessionContext = {
    * Ajustes de nadie.
    */
   gestion: OrgEnGestion | null;
+  /**
+   * Si el correo está en `PLATFORM_ADMIN_EMAILS`. Sale aquí y no de una
+   * consulta aparte porque la sesión ya tenía que leer el correo para decidir
+   * si respeta la cookie de gestión: dos fuentes de "¿mandan en la plataforma?"
+   * son dos sitios donde equivocarse.
+   */
+  adminDePlataforma: boolean;
 };
 
 export class UnauthorizedError extends Error {
@@ -32,6 +43,7 @@ export async function requireSession(): Promise<SessionContext> {
   const auth = getAuth();
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new UnauthorizedError();
+  const adminDePlataforma = esAdminDePlataforma(session.user.email);
   // La cookie de gestión solo la decide `orgEnGestion()`, que exige que el
   // correo esté en PLATFORM_ADMIN_EMAILS: puesta a mano por un cliente, no abre nada.
   const gestion = await orgEnGestion(session.user.email);
@@ -41,6 +53,7 @@ export async function requireSession(): Promise<SessionContext> {
       organizationId: gestion.organizationId,
       role: "owner",
       gestion,
+      adminDePlataforma,
     };
   }
   // La sesión puede crearse antes de que la membresía exista (registro
@@ -54,6 +67,7 @@ export async function requireSession(): Promise<SessionContext> {
     organizationId: membership.organizationId,
     role: membership.role,
     gestion: null,
+    adminDePlataforma,
   };
 }
 

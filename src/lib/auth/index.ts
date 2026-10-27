@@ -40,7 +40,10 @@ function createAuth() {
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         // Rate limit por IP en login/registro (FR-062): 10 / 10 min → 429.
-        if (RATE_LIMITED_PATHS.has(ctx.path)) {
+        // El alta interna (panel → `runInternalSignup`) queda fuera: no viene
+        // de una IP sino de una ruta ya pasada por `withPanel`, y sin este
+        // filtro dar de alta once tiendas en diez minutos sería un 429.
+        if (RATE_LIMITED_PATHS.has(ctx.path) && !isInternalSignup()) {
           const ip = clientIp(ctx.headers);
           const result = checkRateLimit(`${ctx.path}:${ip}`, AUTH_RATE_LIMIT);
           if (!result.allowed) {

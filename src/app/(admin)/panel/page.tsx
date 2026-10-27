@@ -1,5 +1,6 @@
 import { listarTiendas } from "@/server/platform/resumen";
 import { BotonGestion } from "@/components/panel/boton-gestion";
+import { NuevaTienda } from "@/components/panel/nueva-tienda";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +31,13 @@ export default async function PanelTiendasPage() {
         en su equipo: sales arriba, en la franja de gestión, y vuelves al panel con el botón.
       </p>
 
+      <div className="mt-5">
+        <NuevaTienda />
+      </div>
+
       {tiendas.length === 0 ? (
         <p className="mt-8 text-sm text-text-2">Todavía no hay tiendas registradas.</p>
-      ) : (
-        <div className="mt-4 overflow-x-auto rounded-xl border">
+      ) : (        <div className="mt-4 overflow-x-auto rounded-xl border">
           <table className="w-full text-left text-[13px]">
             <thead className="bg-subtle text-[11px] uppercase text-text-3">
               <tr>
