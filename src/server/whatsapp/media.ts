@@ -6,9 +6,11 @@ import { getEnv } from "@/lib/env";
 import { graphRequest, MetaApiError } from "@/lib/meta/client";
 import {
   getCredentialsByOrg,
+  hablaPorZernio,
   type Credentials,
 } from "@/server/whatsapp/credentials";
 import { isForbiddenUploadMime } from "@/server/whatsapp/media-headers";
+import { ZERNIO_BASE } from "@/server/zernio";
 
 /**
  * 008 — Única frontera de media con la Graph API (constitución II: todo el
@@ -200,6 +202,51 @@ export async function downloadGraphMedia(
 }
 
 /**
+ * 023 — Descarga un adjunto que llegó por Zernio. Su webhook no manda un id de
+ * Graph sino la URL de `GET /v1/whatsapp/media/{mediaId}`, que se pide con la
+ * API key en el Authorization. Se guarda tal cual porque Meta borra el archivo
+ * tras su ventana de retención: la copia local es lo único que queda.
+ */
+/**
+ * Descarga un adjunto que llegó por Zernio.
+ *
+ * `mediaRef` admite dos formas porque el evento webhook solo garantiza la URL,
+ * y en el bot conviene guardar el id: `https://…/whatsapp/media/{id}` se usa
+ * tal cual, y un id pelado se resuelve contra `ZERNIO_BASE` (así
+ * `GET /api/bot/media/{mediaId}` sigue siendo un segmento seguro).
+ */
+export async function downloadZernioMedia(
+  token: string,
+  mediaRef: string,
+  maxBytes: number = MEDIA_LIMITS.document.maxBytes
+): Promise<{ data: Buffer; mimeType: string | null; fileSize: number }> {
+  const url = mediaRef.startsWith("http")
+    ? mediaRef
+    : `${ZERNIO_BASE}/whatsapp/media/${encodeURIComponent(mediaRef)}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  } catch {
+    throw new MediaFetchError("No se pudo descargar el adjunto");
+  }
+  if (!res.ok) {
+    throw new MediaFetchError(
+      `La descarga devolvió ${res.status}`,
+      res.status === 404 || res.status === 410
+    );
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.byteLength > maxBytes) {
+    throw new MediaFetchError("El adjunto excede el límite de tamaño", true);
+  }
+  return {
+    data: buf,
+    mimeType: res.headers.get("content-type"),
+    fileSize: buf.byteLength,
+  };
+}
+
+/**
  * Garantiza que el asset esté en disco (`fetchStatus=available`).
  * Se usa en la descarga in-process post-ingesta Y on-demand desde la ruta de
  * media. Nunca lanza hacia el webhook: el que llama decide qué hacer con el
@@ -224,10 +271,12 @@ export async function ensureAssetAvailable(
   if (!creds) return null;
 
   try {
-    const { data, mimeType, fileSize } = await downloadGraphMedia(
-      creds.token,
-      asset.waMediaId
-    );
+    // El `wa_media_id` de un adjunto que vino por Zernio es una URL suya, no un
+    // id de Graph: el transporte se elige por la conexión, no por el texto,
+    // para que un número migrado no intente descargar por Meta.
+    const { data, mimeType, fileSize } = hablaPorZernio(creds)
+      ? await downloadZernioMedia(creds.token, asset.waMediaId)
+      : await downloadGraphMedia(creds.token, asset.waMediaId);
     const storagePath = await saveMediaFile(organizationId, assetId, data);
     const updated = await db
       .update(schema.mediaAsset)

@@ -23,8 +23,9 @@ const save = vi.hoisted(() => vi.fn(async () => {}));
 const disconnect = vi.hoisted(() => vi.fn(async () => {}));
 const creds = vi.hoisted(() => ({
   current: null as null | {
-    wabaId: string;
-    phoneNumberId: string;
+    source: string;
+    wabaId: string | null;
+    phoneNumberId: string | null;
     token: string;
     status: string;
     displayPhoneNumber: string | null;
@@ -42,6 +43,7 @@ vi.mock("@/server/channels/enabled", () => ({ isChannelEnabled: () => false }));
 vi.mock("@/server/whatsapp/credentials", () => ({
   desconectarCanal: disconnect,
   getCredentialsByOrg: async () => creds.current,
+  hablaPorZernio: (c: { source?: string } | null) => c?.source === "zernio",
   saveCredentials: save,
   tokenLast4: (t: string) => t.slice(-4),
 }));
@@ -122,6 +124,7 @@ describe("guardar la conexión registra el webhook", () => {
 describe("desconectar quita el webhook que puso el guardado", () => {
   beforeEach(() => {
     creds.current = {
+      source: "meta",
       wabaId: "111",
       phoneNumberId: "222",
       token: "EAAG-token",
@@ -165,6 +168,7 @@ describe("«Registrar en Meta» con la conexión guardada", () => {
 
   it("con conexión → registra con el token guardado y la URL fija", async () => {
     creds.current = {
+      source: "meta",
       wabaId: "111",
       phoneNumberId: "222",
       token: "EAAG-guardado",
@@ -187,6 +191,7 @@ describe("«Registrar en Meta» con la conexión guardada", () => {
 
   it("si Meta dice que no, devuelve el motivo con 422 (503 si Meta está caída)", async () => {
     creds.current = {
+      source: "meta",
       wabaId: "111",
       phoneNumberId: "222",
       token: "EAAG-guardado",
@@ -213,5 +218,46 @@ describe("«Registrar en Meta» con la conexión guardada", () => {
       instagramUrl: null,
       messengerUrl: null,
     });
+  });
+});
+
+/**
+ * 023: un número conectado por Zernio no tiene nada que registrar en Meta. Si
+ * el CRM lo intentara, suscribiría el número a la app de otra tienda.
+ */
+describe("las superficies de Meta se cierran en modo Zernio", () => {
+  const zernio = {
+    source: "zernio",
+    wabaId: null,
+    phoneNumberId: null,
+    token: "zrk_key",
+    status: "connected",
+    displayPhoneNumber: "+1 202 908 7457",
+    verifiedName: null,
+  };
+
+  it("PUT no reescribe la fila de Zernio con credenciales de Meta", async () => {
+    creds.current = zernio;
+    const res = await put();
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("canal_zernio");
+    expect(save).not.toHaveBeenCalled();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it("«Registrar en Meta» responde 409 y no llama a la Graph API", async () => {
+    creds.current = zernio;
+    const res = await webhookPost();
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("canal_zernio");
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it("desconectar no intenta quitar un webhook que Zernio puso", async () => {
+    creds.current = zernio;
+    const res = await DELETE();
+    expect(res.status).toBe(200);
+    expect(unregister).not.toHaveBeenCalled();
+    expect(disconnect).toHaveBeenCalledWith("org_a");
   });
 });

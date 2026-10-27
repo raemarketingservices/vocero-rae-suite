@@ -2,7 +2,7 @@ import { apiError, withAuth } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import { isChannelEnabled } from "@/server/channels/enabled";
 import { registerWebhookForNumber } from "@/server/whatsapp/connect";
-import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
+import { getCredentialsByOrg, hablaPorZernio } from "@/server/whatsapp/credentials";
 import { webhookUrl, webhookVerifyToken } from "@/server/whatsapp/webhook-url";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +44,23 @@ export const POST = withAuth(async (session) => {
       409,
       "sin_conexion",
       "Primero guarda la conexión de WhatsApp."
+    );
+  }
+  // 023: el webhook de un número conectado por Zernio se da de alta en el
+  // panel de Zernio, no en Meta. Registrarlo aquí suscribiría el número a la
+  // app de otra tienda.
+  if (hablaPorZernio(creds)) {
+    return apiError(
+      409,
+      "canal_zernio",
+      "Este número habla por Zernio: el webhook se configura en Zernio, no en Meta"
+    );
+  }
+  if (!creds.wabaId || !creds.phoneNumberId) {
+    return apiError(
+      409,
+      "sin_conexion",
+      "La conexión no tiene WABA ni número de Meta: vuelve a conectar el número"
     );
   }
 

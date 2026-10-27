@@ -7,12 +7,24 @@ import {
 } from "@/server/inbox/webhook";
 import { processEchoesValue, processMessagesValue } from "@/server/inbox/ingest";
 import { processTemplateStatusValue } from "@/server/whatsapp/template-events";
+import {
+  isValidZernioSignature,
+  parseZernioEvent,
+  zernioSignatureFrom,
+} from "@/server/zernio";
+import {
+  processZernioPayload,
+  resolveZernioSecret,
+} from "@/server/zernio/dispatch";
 
 /**
  * Webhook público de WhatsApp (contrato webhook.md).
  * Capa 1: el segmento [webhookToken] debe coincidir (si no → 404 sin efectos).
  * Capa 2: firma x-hub-signature-256 solo si META_APP_SECRET está configurado.
  * El POST siempre responde 200 tras validar; el procesamiento va en after().
+ *
+ * Desde 023 comparte la ruta con las entregas de Zernio, que traen su propia
+ * forma y su propia firma HMAC.
  */
 export const dynamic = "force-dynamic";
 
@@ -44,6 +56,29 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const rawBody = await req.text();
+
+  // 023: cuando el número está conectado por Zernio, sus eventos llegan A ESTA
+  // misma URL. Las dos formas son inconfundibles (Meta manda `object`, Zernio
+  // manda `account`), así que la capa de firma se elige leyendo el cuerpo: cada
+  // una se valida con su propio secreto.
+  const zernio = parseZernioEvent(rawBody);
+  if (zernio) {
+    const { secret } = await resolveZernioSecret(rawBody);
+    if (
+      !isValidZernioSignature(rawBody, zernioSignatureFrom(req.headers), secret)
+    ) {
+      return new Response(null, { status: 401 });
+    }
+    after(async () => {
+      try {
+        await processZernioPayload(zernio);
+      } catch (err) {
+        console.error("[webhook] error procesando evento de Zernio:", err);
+      }
+    });
+    return Response.json({ received: true });
+  }
+
   const signature = req.headers.get("x-hub-signature-256");
   if (!isValidSignature(rawBody, signature, env.META_APP_SECRET)) {
     return new Response(null, { status: 401 });

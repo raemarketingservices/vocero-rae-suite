@@ -177,11 +177,13 @@ export function normalizeZernioEvent(payload: unknown): MessengerInbound[] {
 
 function resolveType(
   text: string | null,
-  attachment: { type?: string; payload?: { sticker_id?: number } } | undefined
+  // `payload` se lee suelto porque las dos fuentes lo llenan distinto: Meta
+  // manda `sticker_id` y Zernio manda `voice` en los audios de WhatsApp.
+  attachment: { type?: string; payload?: Record<string, unknown> | null } | undefined
 ): string | null {
   if (text) return "text";
   if (!attachment) return null;
-  if (attachment.payload?.sticker_id) return "sticker";
+  if (attachment.payload?.["sticker_id"]) return "sticker";
   return ATTACHMENT_TYPE[attachment.type ?? ""] ?? "unsupported";
 }
 

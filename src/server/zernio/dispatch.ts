@@ -4,6 +4,8 @@ import { getInstagramCredentialsByAccountRef } from "@/server/instagram/credenti
 import { processZernioEvent } from "@/server/instagram/ingest";
 import { getMessengerCredentialsByAccountRef } from "@/server/messenger/credentials";
 import { processZernioMessengerEvent } from "@/server/messenger/ingest";
+import { getCredentialsByAccountRef } from "@/server/whatsapp/credentials";
+import { processZernioWhatsappEvent } from "@/server/whatsapp/ingest-zernio";
 import { parseZernioEvent, type ZernioEvent } from "@/server/zernio";
 
 /**
@@ -16,8 +18,8 @@ import { parseZernioEvent, type ZernioEvent } from "@/server/zernio";
  * de Messenger descartados en silencio — el peor modo de fallo posible, porque
  * el webhook responde 200 y no hay nada que investigar.
  *
- * Así que ambas rutas de Zernio reparten por `account.platform`, y da igual
- * cuál de las dos URLs esté configurada.
+ * Así que las rutas de Zernio reparten por `account.platform`, y da igual cuál
+ * de las URLs esté configurada.
  */
 
 /** A qué canal pertenece un evento, o null si no es de ninguno nuestro. */
@@ -27,6 +29,7 @@ export function zernioTargetChannel(payload: unknown): Channel | null {
   const platform = (evt.account?.platform ?? "").toLowerCase();
   if (platform === "instagram") return "instagram";
   if (platform === "facebook" || platform === "messenger") return "messenger";
+  if (platform === "whatsapp") return "whatsapp";
   return null;
 }
 
@@ -48,7 +51,9 @@ export async function resolveZernioSecret(
       ? await getMessengerCredentialsByAccountRef(accountRef)
       : channel === "instagram"
         ? await getInstagramCredentialsByAccountRef(accountRef)
-        : null;
+        : channel === "whatsapp"
+          ? await getCredentialsByAccountRef(accountRef)
+          : null;
 
   return { secret: creds?.webhookSecret ?? null, accountRef, channel };
 }
@@ -69,5 +74,6 @@ export async function processZernioPayload(payload: unknown): Promise<void> {
   }
 
   if (channel === "messenger") await processZernioMessengerEvent(payload);
+  else if (channel === "whatsapp") await processZernioWhatsappEvent(payload);
   else await processZernioEvent(payload);
 }

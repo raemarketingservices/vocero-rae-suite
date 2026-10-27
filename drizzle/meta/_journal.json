@@ -120,6 +120,13 @@
       "when": 1791469451742,
       "tag": "0016_despacho_al_cerebro",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793070694816,
+      "tag": "0017_whatsapp_zernio",
+      "breakpoints": true
     }
   ]
 }

@@ -3,7 +3,8 @@ import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { apiError, parseBody } from "@/lib/api";
 import { requireBotKey, resolveInstanceOrg } from "@/server/bot/auth";
-import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
+import { hablaPorZernio, getCredentialsByOrg } from "@/server/whatsapp/credentials";
+import { sendZernioTyping } from "@/server/zernio";
 import { graphRequest } from "@/lib/meta/client";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,29 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, reason: "ai_paused" });
   }
 
+  const creds = await getCredentialsByOrg(organizationId);
+  if (!creds) {
+    return apiError(409, "no_connection", "WhatsApp no está conectado");
+  }
+
+  // 023: por Zernio el indicador se pide al hilo, y Zernio refiere al entrante
+  // más reciente él mismo — no hay `wamid` propio que buscar.
+  if (hablaPorZernio(creds)) {
+    if (!conv.channelThreadRef) {
+      return Response.json({ ok: false, reason: "no_thread" });
+    }
+    try {
+      const ok = await sendZernioTyping({
+        token: creds.token,
+        accountId: creds.accountRef,
+        conversationId: conv.channelThreadRef,
+      });
+      return Response.json({ ok });
+    } catch {
+      return Response.json({ ok: false, reason: "zernio_error" });
+    }
+  }
+
   const msgs = await db
     .select({ waMessageId: schema.message.waMessageId })
     .from(schema.message)
@@ -67,11 +91,6 @@ export async function POST(req: Request) {
     .limit(1);
   const wamid = msgs[0]?.waMessageId;
   if (!wamid) return Response.json({ ok: false, reason: "no_inbound" });
-
-  const creds = await getCredentialsByOrg(organizationId);
-  if (!creds) {
-    return apiError(409, "no_connection", "WhatsApp no está conectado");
-  }
 
   try {
     await graphRequest(`${creds.phoneNumberId}/messages`, {

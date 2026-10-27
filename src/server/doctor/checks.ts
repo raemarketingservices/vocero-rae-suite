@@ -13,6 +13,7 @@ import {
   tokenLast4,
   type Credentials,
 } from "@/server/whatsapp/credentials";
+import { verifyZernioToken } from "@/server/zernio";
 
 /**
  * `pnpm doctor` — las comprobaciones, una por línea, con el arreglo exacto de
@@ -342,7 +343,8 @@ export async function checkMediaDir(dir: string): Promise<CheckResult> {
 
 export type StoredWhatsApp = {
   organization: string;
-  phoneNumberId: string;
+  /** null en las conexiones por Zernio: no hay número de Meta que señalar. */
+  phoneNumberId: string | null;
   displayPhoneNumber: string | null;
   /** null = la fila existe pero no se pudo descifrar con la ENCRYPTION_KEY actual. */
   credentials: Credentials | null;
@@ -400,6 +402,7 @@ function isDecryptError(err: unknown): boolean {
 export type WhatsAppDeps = {
   load?: () => Promise<StoredWhatsApp[]>;
   test?: (phoneNumberId: string, token: string) => Promise<ConnectionCheck>;
+  verifyZernio?: (token: string) => Promise<void>;
 };
 
 /**
@@ -410,6 +413,8 @@ export type WhatsAppDeps = {
 export async function checkWhatsApp(deps: WhatsAppDeps = {}): Promise<CheckResult[]> {
   const load = deps.load ?? loadWhatsAppCredentials;
   const test = deps.test ?? testConnection;
+  const verifyZernio =
+    deps.verifyZernio ?? ((token: string) => verifyZernioToken(token));
 
   let stored: StoredWhatsApp[];
   try {
@@ -448,7 +453,12 @@ export async function checkWhatsApp(deps: WhatsAppDeps = {}): Promise<CheckResul
 
   const results: CheckResult[] = [];
   for (const item of stored) {
-    const label = `WhatsApp ${item.displayPhoneNumber ?? item.phoneNumberId} (${item.organization})`;
+    const numero =
+      item.displayPhoneNumber ??
+      item.phoneNumberId ??
+      item.credentials?.accountRef ??
+      "sin número";
+    const label = `WhatsApp ${numero} (${item.organization})`;
     if (!item.credentials) {
       results.push({
         status: "fail",
@@ -458,7 +468,44 @@ export async function checkWhatsApp(deps: WhatsAppDeps = {}): Promise<CheckResul
       });
       continue;
     }
-    const { token, phoneNumberId } = item.credentials;
+    const { token, phoneNumberId, source, accountRef } = item.credentials;
+
+    // 023: un número por Zernio no tiene WABA que sondear. Lo que sí se puede
+    // comprobar desde aquí es que la API key siga viva; la salud del número la
+    // responde Zernio (GET /v1/accounts/{id}/health).
+    if (source === "zernio") {
+      try {
+        await verifyZernio(token);
+        results.push({
+          status: "ok",
+          label,
+          detail: `Zernio respondió · token …${tokenLast4(token)}${
+            accountRef ? ` · cuenta ${accountRef}` : ""
+          }`,
+        });
+      } catch (err) {
+        results.push({
+          status: "fail",
+          label,
+          detail: `la API key de Zernio no sirve: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+          fix: "Configuración → WhatsApp: pega una API key vigente de Zernio",
+        });
+      }
+      continue;
+    }
+
+    if (!phoneNumberId) {
+      results.push({
+        status: "fail",
+        label,
+        detail: "la conexión de Meta quedó guardada sin Phone Number ID",
+        fix: "Configuración → WhatsApp: vuelve a conectar el número",
+      });
+      continue;
+    }
+
     let check: ConnectionCheck;
     try {
       check = await test(phoneNumberId, token);

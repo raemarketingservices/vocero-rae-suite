@@ -3,7 +3,7 @@ import { z } from "zod";
 import { mockGuard } from "@/lib/dev-guard";
 import { apiError, parseBody } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
-import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
+import { getCredentialsByOrg, hablaPorZernio } from "@/server/whatsapp/credentials";
 import {
   buildStatusPayload,
   deliverToWebhook,
@@ -37,6 +37,15 @@ export async function POST(req: Request) {
 
   const creds = await getCredentialsByOrg(rows[0].organizationId);
   if (!creds) return apiError(409, "not_connected", "Sin número conectado");
+  // El mock imita los payloads de la API de Meta; un número conectado por
+  // Zernio no tiene WABA ni Phone Number ID que poner en ese payload.
+  if (hablaPorZernio(creds) || !creds.wabaId || !creds.phoneNumberId) {
+    return apiError(
+      409,
+      "not_connected",
+      "Este número habla por Zernio: sus estados no llegan por el webhook de Meta"
+    );
+  }
 
   const payload = buildStatusPayload({
     wabaId: creds.wabaId,

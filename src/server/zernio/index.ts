@@ -71,10 +71,31 @@ export type ZernioEvent = {
     text?: string | null;
     /** Cuándo lo mandó la persona, ISO-8601. Ver `zernioSentAtSeconds`. */
     sentAt?: string;
-    attachments?: { type?: string; url?: string }[];
-    sender?: { id?: string; name?: string | null; username?: string | null };
+    attachments?: {
+      type?: string;
+      url?: string;
+      mimeType?: string;
+      /** WhatsApp: `voice: true` en un audio lo hace nota de voz. */
+      payload?: { voice?: boolean } | null;
+    }[];
+    sender?: {
+      id?: string;
+      name?: string | null;
+      username?: string | null;
+      /** WhatsApp: E.164 con `+`; nulo durante el despliegue de BSUID. */
+      phoneNumber?: string | null;
+      /** WhatsApp: ancla de identidad recomendada por Meta. */
+      businessScopedUserId?: string | null;
+    };
   };
   account?: { id?: string; platform?: string };
+  /**
+   * Solo en `message.delivered` / `message.read` / `message.failed`: cuándo lo
+   * reportó la plataforma, ISO-8601.
+   */
+  statusAt?: string;
+  /** Solo en `message.failed`: `code`, `title` y `message` de la plataforma. */
+  error?: { code?: number; title?: string; message?: string } | null;
 };
 
 /**
@@ -121,6 +142,30 @@ export function looksLikeMetaPayload(payload: unknown, object: string): boolean 
 export type ZernioSendResult = { platformMessageId: string };
 
 /**
+ * Id del mensaje en la respuesta de envío.
+ *
+ * Zernio responde `{ success, data: { messageId } }` y ese `messageId` es el
+ * id DE LA PLATAFORMA (el `wamid` en WhatsApp), que es exactamente lo que
+ * después traen los `message.delivered`/`read`/`failed`: perderlo deja el
+ * mensaje con el reloj puesto para siempre, porque ningún acuse lo encuentra.
+ * Las otras dos formas se siguen aceptando por si la API responde plano.
+ */
+function idDelMensaje(res: unknown): string | null {
+  const r = res as {
+    data?: { messageId?: string };
+    message?: { id?: string };
+    id?: string;
+  } | null;
+  const id = r?.data?.messageId ?? r?.message?.id ?? r?.id;
+  return id ? String(id) : null;
+}
+
+/** Ruta de respuesta de una conversación (JSON y multipart comparten endpoint). */
+function sendPath(conversationId: string): string {
+  return `/inbox/conversations/${encodeURIComponent(conversationId)}/messages`;
+}
+
+/**
  * Responde en una conversación de Zernio.
  *
  * `accountId` va en el cuerpo aunque la conversación ya lo implique (lo exige
@@ -152,28 +197,169 @@ export async function sendZernioMessage(input: {
     body.messageTag = "HUMAN_AGENT";
   }
 
-  const res = await zernioFetch(
-    `/inbox/conversations/${encodeURIComponent(input.conversationId)}/messages`,
-    {
-      method: "POST",
-      token: input.token,
-      body,
-      ...(input.idempotencyKey
-        ? { headers: { "Idempotency-Key": input.idempotencyKey } }
-        : {}),
-    }
+  const res = await zernioFetch(sendPath(input.conversationId), {
+    method: "POST",
+    token: input.token,
+    body,
+    ...(input.idempotencyKey
+      ? { headers: { "Idempotency-Key": input.idempotencyKey } }
+      : {}),
+  });
+
+  return { platformMessageId: idDelMensaje(res) ?? `zernio_${Date.now()}` };
+}
+
+/**
+ * 023 — Adjunto saliente por Zernio.
+ *
+ * No hay subida a la Graph API que preceda al envío: Zernio recibe el binario
+ * él mismo (multipart con la parte `attachment`) y se encarga de la plataforma.
+ * Por eso el CRM no necesita un token de Meta ni una URL pública propia para
+ * mandar una foto — con `attachmentUrl` sí la necesitaría.
+ */
+export async function sendZernioAttachment(input: {
+  token: string;
+  accountId: string | null;
+  conversationId: string | null;
+  kind: "image" | "video" | "audio" | "document";
+  data: Buffer;
+  fileName: string;
+  mimeType: string;
+  caption?: string | null;
+  idempotencyKey?: string;
+}): Promise<ZernioSendResult> {
+  if (!input.conversationId) {
+    throw new MetaApiError(
+      "La conversación no tiene referencia de hilo en Zernio",
+      { status: 400 }
+    );
+  }
+
+  const form = new FormData();
+  if (input.accountId) form.append("accountId", input.accountId);
+  // WhatsApp no muestra pie en un audio: sería un segundo mensaje.
+  if (input.caption && input.kind !== "audio") {
+    form.append("message", input.caption);
+  }
+  form.append(
+    "attachment",
+    // La copia es intencional: Blob quiere un ArrayBuffer y un Buffer puede
+    // estar montado sobre memoria compartida.
+    new Blob([Uint8Array.from(input.data)], { type: input.mimeType }),
+    input.fileName
   );
 
-  const id =
-    (res as { message?: { id?: string }; id?: string }).message?.id ??
-    (res as { id?: string }).id ??
-    `zernio_${Date.now()}`;
-  return { platformMessageId: String(id) };
+  const res = await zernioFetch(sendPath(input.conversationId), {
+    method: "POST",
+    token: input.token,
+    form,
+    ...(input.idempotencyKey
+      ? { headers: { "Idempotency-Key": input.idempotencyKey } }
+      : {}),
+  });
+
+  return { platformMessageId: idDelMensaje(res) ?? `zernio_${Date.now()}` };
+}
+
+/**
+ * Ubicación o tarjeta(s) de contacto por Zernio. Los campos son los mismos que
+ * acepta la Cloud API de WhatsApp, así que el llamador arma un payload único
+ * para los dos transportes.
+ */
+export async function sendZernioStructured(input: {
+  token: string;
+  accountId: string | null;
+  conversationId: string | null;
+  location?: { latitude: number; longitude: number; name?: string; address?: string };
+  contacts?: unknown[];
+  idempotencyKey?: string;
+}): Promise<ZernioSendResult> {
+  if (!input.conversationId) {
+    throw new MetaApiError(
+      "La conversación no tiene referencia de hilo en Zernio",
+      { status: 400 }
+    );
+  }
+
+  const res = await zernioFetch(sendPath(input.conversationId), {
+    method: "POST",
+    token: input.token,
+    body: {
+      accountId: input.accountId,
+      ...(input.location ? { location: input.location } : {}),
+      ...(input.contacts ? { contacts: input.contacts } : {}),
+    },
+    ...(input.idempotencyKey
+      ? { headers: { "Idempotency-Key": input.idempotencyKey } }
+      : {}),
+  });
+
+  return { platformMessageId: idDelMensaje(res) ?? `zernio_${Date.now()}` };
+}
+
+/**
+ * «escribiendo…» en WhatsApp (y azules del último entrante de paso, que es lo
+ * que hace Meta con el `typing_indicator`). Zernio refiere al entrante más
+ * reciente él mismo: no hay `wamid` que buscar.
+ *
+ * Es best-effort por contrato: siempre responde 200 y `success` dice si de
+ * verdad llegó a la plataforma.
+ */
+export async function sendZernioTyping(input: {
+  token: string;
+  accountId: string | null;
+  conversationId: string;
+}): Promise<boolean> {
+  const res = await zernioFetch(
+    `/inbox/conversations/${encodeURIComponent(input.conversationId)}/typing`,
+    { method: "POST", token: input.token, body: { accountId: input.accountId } }
+  );
+  return Boolean((res as { success?: boolean } | null)?.success);
 }
 
 /** Comprueba que la llave sirve (se usa antes de guardar una conexión). */
 export async function verifyZernioToken(token: string): Promise<void> {
   await zernioFetch("/inbox/conversations?limit=1", { token });
+}
+
+/** Una cuenta conectada en Zernio, en lo que le sirve al CRM para elegir una. */
+export type ZernioAccount = {
+  id: string;
+  name: string | null;
+  isActive: boolean;
+  needsReconnection: boolean;
+};
+
+/**
+ * Cuentas conectadas de una plataforma.
+ *
+ * Con `platform=whatsapp` Zernio lista la cuenta de WhatsApp sandbox cuando el
+ * equipo la tiene activa y `includeSandbox` no se pide; no se filtra nada más,
+ * porque las cuentas internas `sms`/`phone` que acompañan a un número ya las
+ * saca el filtro de plataforma.
+ */
+export async function listZernioAccounts(
+  token: string,
+  platform: string
+): Promise<ZernioAccount[]> {
+  const res = await zernioFetch(
+    `/accounts?platform=${encodeURIComponent(platform)}`,
+    { token }
+  );
+  const rows = (res as { accounts?: unknown[] } | null)?.accounts ?? [];
+  return rows
+    .map((r) => r as Partial<Record<string, unknown>> | null)
+    .filter((r) => typeof r?._id === "string" && r._id !== "")
+    .map((r) => ({
+      id: String(r!._id),
+      name:
+        (typeof r!.displayName === "string" && r!.displayName) ||
+        (typeof r!.username === "string" && r!.username) ||
+        (typeof r!.platformUserId === "string" && r!.platformUserId) ||
+        null,
+      isActive: r!.isActive !== false,
+      needsReconnection: r!.needsReconnection === true,
+    }));
 }
 
 /**
@@ -187,6 +373,8 @@ async function zernioFetch(
     method?: "GET" | "POST";
     token: string;
     body?: unknown;
+    /** Cuerpo multipart: la propia fetch le pone el boundary. */
+    form?: FormData;
     headers?: Record<string, string>;
   }
 ): Promise<unknown> {
@@ -199,7 +387,12 @@ async function zernioFetch(
         ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
         ...(opts.headers ?? {}),
       },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body:
+        opts.form !== undefined
+          ? opts.form
+          : opts.body !== undefined
+            ? JSON.stringify(opts.body)
+            : undefined,
     });
   } catch (cause) {
     throw new MetaApiError("No se pudo contactar la API de Zernio", {

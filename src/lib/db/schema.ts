@@ -495,8 +495,26 @@ export const metaCredentials = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    wabaId: text("waba_id").notNull(),
-    phoneNumberId: text("phone_number_id").notNull(),
+    /**
+     * 023 — De dónde salen los mensajes de este número: la Cloud API de Meta
+     * (una app propia por tienda) o Zernio (una cuenta por tienda). Como en
+     * Instagram y Messenger, el transporte se decide POR ORGANIZACIÓN y las
+     * dos fuentes conviven en la misma instancia.
+     */
+    source: text("source", { enum: ["zernio", "meta"] })
+      .notNull()
+      .default("meta"),
+    /**
+     * IDs de la Cloud API. En modo Zernio no existen —ahí enruta
+     * `account_ref`— así que son opcionales. Se conservan cuando el número
+     * migra de Meta a Zernio para poder volver atrás sin perder la conexión.
+     */
+    wabaId: text("waba_id"),
+    phoneNumberId: text("phone_number_id"),
+    /** Zernio: `account.id` de la cuenta conectada. Meta directo: null. */
+    accountRef: text("account_ref"),
+    /** Secreto HMAC de las entregas de Zernio; null en modo Meta. */
+    webhookSecret: text("webhook_secret"),
     displayPhoneNumber: text("display_phone_number"),
     verifiedName: text("verified_name"),
     tokenCipher: text("token_cipher").notNull(),
@@ -510,8 +528,10 @@ export const metaCredentials = pgTable(
   },
   (t) => [
     uniqueIndex("meta_credentials_org_uq").on(t.organizationId),
-    // El webhook enruta por phone_number_id: debe ser único en la instancia.
+    // El webhook de Meta enruta por phone_number_id: único en la instancia.
+    // Los nulos de las filas de Zernio no chocan entre sí en Postgres.
     uniqueIndex("meta_credentials_phone_uq").on(t.phoneNumberId),
+    index("meta_credentials_account_ref_idx").on(t.accountRef),
   ]
 );
 

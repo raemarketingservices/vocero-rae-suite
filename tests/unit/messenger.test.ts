@@ -322,10 +322,13 @@ describe("017 · reparto de Zernio por plataforma (un webhook, varios canales)",
     expect(zernioTargetChannel(zernioEvent({ account: { id: ACCOUNT, platform: "instagram" } }))).toBe("instagram");
     expect(zernioTargetChannel(zernioEvent({ account: { id: ACCOUNT, platform: "facebook" } }))).toBe("messenger");
     expect(zernioTargetChannel(zernioEvent({ account: { id: ACCOUNT, platform: "MESSENGER" } }))).toBe("messenger");
+    // 023: WhatsApp también viaja por este webhook cuando el número está
+    // conectado por Zernio.
+    expect(zernioTargetChannel(zernioEvent({ account: { id: ACCOUNT, platform: "whatsapp" } }))).toBe("whatsapp");
   });
 
   it("una plataforma que Vocero no atiende no es de nadie", () => {
-    for (const platform of ["whatsapp", "x", "tiktok", "linkedin", ""]) {
+    for (const platform of ["x", "tiktok", "linkedin", ""]) {
       expect(zernioTargetChannel(zernioEvent({ account: { id: ACCOUNT, platform } }))).toBeNull();
     }
     expect(zernioTargetChannel(null)).toBeNull();

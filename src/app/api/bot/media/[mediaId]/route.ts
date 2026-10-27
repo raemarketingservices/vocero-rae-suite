@@ -1,7 +1,11 @@
 import { apiError } from "@/lib/api";
 import { requireBotKey, resolveInstanceOrg } from "@/server/bot/auth";
-import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
-import { downloadGraphMedia, MediaFetchError } from "@/server/whatsapp/media";
+import { getCredentialsByOrg, hablaPorZernio } from "@/server/whatsapp/credentials";
+import {
+  downloadGraphMedia,
+  downloadZernioMedia,
+  MediaFetchError,
+} from "@/server/whatsapp/media";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +41,11 @@ export async function GET(
   }
 
   try {
-    const { data, mimeType } = await downloadGraphMedia(
-      creds.token,
-      mediaId,
-      MAX_MEDIA_BYTES
-    );
+    // El transporte depende de cómo llegó el adjunto: Zernio sirve el archivo
+    // con su propio id; Graph necesita el `mediaId` de Meta.
+    const { data, mimeType } = hablaPorZernio(creds)
+      ? await downloadZernioMedia(creds.token, mediaId, MAX_MEDIA_BYTES)
+      : await downloadGraphMedia(creds.token, mediaId, MAX_MEDIA_BYTES);
     return new Response(new Uint8Array(data), {
       headers: {
         "content-type": mimeType ?? "application/octet-stream",

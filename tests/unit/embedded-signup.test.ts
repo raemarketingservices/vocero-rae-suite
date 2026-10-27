@@ -19,9 +19,28 @@ const env = vi.hoisted(() => ({
   META_APP_SECRET: "secreto-de-la-app",
   META_EMBEDDED_SIGNUP_CONFIG_ID: "9876",
 }));
+const save = vi.hoisted(() => vi.fn(async () => {}));
+const conexiones = vi.hoisted(() => ({
+  current: null as null | { source: string },
+}));
+
 vi.mock("@/lib/env", () => ({ getEnv: () => env }));
+vi.mock("@/server/whatsapp/credentials", () => ({
+  getCredentialsByOrg: async () => conexiones.current,
+  hablaPorZernio: (c: { source?: string } | null) => c?.source === "zernio",
+  saveCredentials: save,
+}));
+vi.mock("@/server/whatsapp/connect", () => ({
+  registerWebhookForNumber: async () => ({ ok: true, appWithoutWebhook: true }),
+  testConnection: async () => ({
+    ok: true,
+    displayPhoneNumber: "+52 55 0000 0000",
+    verifiedName: "Negocio",
+  }),
+}));
 
 import {
+  completarRegistroInsertado,
   embeddedSignupConfig,
   embeddedSignupEnabled,
   intercambiarCodigo,
@@ -32,6 +51,8 @@ const SECRET = "secreto-de-la-app";
 
 beforeEach(() => {
   fetchMock.mockReset();
+  save.mockClear();
+  conexiones.current = null;
   globalThis.fetch = fetchMock as unknown as typeof fetch;
 });
 
@@ -140,5 +161,35 @@ describe("intercambiarCodigo", () => {
       ok: false,
       code: "respuesta_inesperada",
     });
+  });
+});
+
+describe("el registro insertado no pisa una conexión de Zernio", () => {
+  it("responde 409 antes de gastar el código y no guarda nada", async () => {
+    conexiones.current = { source: "zernio" };
+    const r = await completarRegistroInsertado({
+      organizationId: "org_a",
+      code: "AQDcodigo",
+      wabaId: "111",
+      phoneNumberId: "222",
+    });
+    expect(r).toMatchObject({ ok: false, code: "canal_zernio" });
+    // Ni siquiera se llama a Meta: el código no se consume y el token no se pide.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("con una conexión de Meta (o sin ninguna) el flujo sigue su curso", async () => {
+    conexiones.current = { source: "meta" };
+    respond("EAAG-token");
+    const r = await completarRegistroInsertado({
+      organizationId: "org_a",
+      code: "AQDcodigo",
+    });
+    // Sin WABA en la respuesta se detiene ahí, pero la guarda de canal no lo
+    // cortó: la llamada a Meta sí ocurrió.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ ok: false, code: "sin_waba" });
+    expect(save).not.toHaveBeenCalled();
   });
 });

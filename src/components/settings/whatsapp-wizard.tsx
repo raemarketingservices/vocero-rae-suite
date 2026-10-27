@@ -11,13 +11,20 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmbeddedSignupCard } from "@/components/settings/embedded-signup-card";
+import { WhatsappZernioCard } from "@/components/settings/whatsapp-zernio-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
+
+type Source = "meta" | "zernio";
 
 type Connection = {
-  wabaId: string;
-  phoneNumberId: string;
+  /** 023: de dónde llegan y a dónde van los mensajes de este número. */
+  source: Source;
+  wabaId: string | null;
+  phoneNumberId: string | null;
+  accountRef: string | null;
   displayPhoneNumber: string | null;
   verifiedName: string | null;
   status: "connected" | "reconnect_required";
@@ -48,6 +55,8 @@ export function WhatsappWizard() {
   const [connection, setConnection] = useState<Connection | null>(null);
   const [webhook, setWebhook] = useState<WebhookInfo | null>(null);
   const [loaded, setLoaded] = useState(false);
+  /** Solo se usa cuando aún no hay conexión: elige qué tarjeta se muestra. */
+  const [canal, setCanal] = useState<Source | null>(null);
   const [registration, setRegistration] = useState<LastRegistration | null>(
     null
   );
@@ -70,6 +79,11 @@ export function WhatsappWizard() {
     return <p className="text-sm text-muted-foreground">Cargando…</p>;
   }
 
+  // Con conexión guardada el canal no se elige: es el que es. Cambiarlo pasa
+  // por desconectar, y las tarjetas de la otra fuente se cierran solas.
+  const fuente: Source = connection?.source ?? canal ?? "zernio";
+  const porZernio = fuente === "zernio";
+
   return (
     <div className="max-w-3xl space-y-6">
       {connection?.status === "reconnect_required" && (
@@ -77,7 +91,9 @@ export function WhatsappWizard() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div className="min-w-[12rem] flex-1">
             <p className="font-medium text-danger-text">
-              El token de WhatsApp expiró o fue revocado.
+              {porZernio
+                ? "La API key de Zernio ya no sirve."
+                : "El token de WhatsApp expiró o fue revocado."}
             </p>
             <p className="text-danger-text opacity-80">
               Los envíos están pausados. Pega un token nuevo abajo y prueba la
@@ -98,11 +114,15 @@ export function WhatsappWizard() {
           <CheckCircle2 className="h-5 w-5 text-success" />
           <div className="min-w-[12rem] flex-1 text-sm">
             <p className="font-medium text-success-text">
-              Número conectado: {connection.displayPhoneNumber ?? connection.phoneNumberId}
+              Número conectado:{" "}
+              {connection.displayPhoneNumber ??
+                connection.phoneNumberId ??
+                connection.accountRef}
             </p>
             <p className="text-success-text opacity-80">
               {connection.verifiedName ? `${connection.verifiedName} · ` : ""}
-              token …{connection.tokenLast4}
+              por {porZernio ? "Zernio" : "Meta"} · token …
+              {connection.tokenLast4}
             </p>
           </div>
           <Badge variant="success">Conectado</Badge>
@@ -115,26 +135,84 @@ export function WhatsappWizard() {
         </div>
       )}
 
-      <EmbeddedSignupCard onConectado={() => void refetch()} />
+      {!connection && (
+        <div className="space-y-2">
+          <Label>¿Cómo quieres conectar el número?</Label>
+          <div className="flex flex-wrap gap-2">
+            {(["zernio", "meta"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setCanal(s)}
+                aria-pressed={fuente === s}
+                className={cn(
+                  "rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors",
+                  fuente === s
+                    ? "border-brand bg-brand-tint text-brand-text"
+                    : "border-border-strong hover:bg-accent"
+                )}
+              >
+                {s === "zernio"
+                  ? "Zernio (API unificada)"
+                  : "Cloud API de Meta (tu WABA y tu pago)"}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-text-3">
+            Con Zernio no hay que dar de alta una app en Meta ni pasar App
+            Review: cada tienda paga su cuenta de Zernio y el número se vincula
+            desde ahí. Con la Cloud API propia, la WABA, el pago a Meta y la
+            verificación del negocio son tuyos, y además tienes plantillas.
+          </p>
+        </div>
+      )}
 
-      <ConnectForm
-        existing={connection}
-        registration={registration?.from === "save" ? registration.result : null}
-        onRegistration={(result) =>
-          setRegistration(result ? { result, from: "save" } : null)
-        }
-        onSaved={() => void refetch()}
-      />
-
-      {webhook && (
-        <WebhookCard
-          webhook={webhook}
-          connection={connection}
-          registration={registration?.from === "button" ? registration.result : null}
-          onRegistration={(result) =>
-            setRegistration(result ? { result, from: "button" } : null)
+      {porZernio ? (
+        <WhatsappZernioCard
+          existing={
+            connection && connection.source === "zernio"
+              ? {
+                  source: "zernio",
+                  accountRef: connection.accountRef,
+                  displayPhoneNumber: connection.displayPhoneNumber,
+                  status: connection.status,
+                  tokenLast4: connection.tokenLast4,
+                }
+              : null
           }
+          webhookUrl={webhook?.url ?? null}
+          onSaved={() => void refetch()}
         />
+      ) : (
+        <>
+          <EmbeddedSignupCard onConectado={() => void refetch()} />
+
+          <ConnectForm
+            existing={connection?.source === "meta" ? connection : null}
+            registration={
+              registration?.from === "save" ? registration.result : null
+            }
+            onRegistration={(result) =>
+              setRegistration(result ? { result, from: "save" } : null)
+            }
+            onSaved={() => void refetch()}
+          />
+
+          {webhook && (
+            <WebhookCard
+              webhook={webhook}
+              connection={
+                connection?.source === "meta" ? connection : null
+              }
+              registration={
+                registration?.from === "button" ? registration.result : null
+              }
+              onRegistration={(result) =>
+                setRegistration(result ? { result, from: "button" } : null)
+              }
+            />
+          )}
+        </>
       )}
     </div>
   );

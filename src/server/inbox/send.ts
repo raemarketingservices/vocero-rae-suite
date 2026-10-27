@@ -6,9 +6,15 @@ import { destinatarioMeta, type Destinatario } from "@/lib/meta/destinatario";
 import { publish } from "@/server/events/bus";
 import {
   getCredentialsByOrg,
+  hablaPorZernio,
   markReconnectRequired,
   type Credentials,
 } from "@/server/whatsapp/credentials";
+import {
+  sendZernioAttachment,
+  sendZernioMessage,
+  sendZernioStructured,
+} from "@/server/zernio";
 import { isWindowOpen } from "@/server/inbox/window";
 import { IG_PREFIX } from "@/server/inbox/identity";
 import {
@@ -63,14 +69,23 @@ type SendTarget = {
   conversation: typeof schema.conversation.$inferSelect;
   /** null cuando el destino no es WhatsApp (014). */
   credentials: Credentials | null;
-  /** El destinatario en la forma que Meta espera: `to` o `recipient`. */
-  destinatario: Destinatario;
+  /**
+   * El destinatario en la forma que Meta espera: `to` o `recipient`.
+   * null solo en un número conectado por Zernio, que responde al hilo y no
+   * consulta la Graph API.
+   */
+  destinatario: Destinatario | null;
   /** El identificador a secas, para lo que no arma un payload de Graph. */
   recipient: string;
   /** 014: presente solo en conversaciones de Instagram. */
   instagram?: InstagramCredentials;
   /** 017: presente solo en conversaciones de Messenger. */
   messenger?: MessengerCredentials;
+  /**
+   * 023: hilo de Zernio de esta conversación. Existe solo cuando el número de
+   * la organización habla por Zernio; es la dirección a la que se responde.
+   */
+  hiloZernio?: string;
 };
 
 /**
@@ -207,6 +222,31 @@ async function prepareSend(
     );
   }
 
+  // 023: en modo Zernio no hay Graph API que llamar: se responde AL HILO que
+  // llegó en el webhook entrante. Sin hilo no hay dirección — un número
+  // migrado conserva sus conversaciones, pero cada una solo recibe su
+  // conversationId de Zernio cuando el cliente escribe por primera vez desde
+  // la migración.
+  if (hablaPorZernio(credentials)) {
+    const hilo = row.conversation.channelThreadRef;
+    if (!hilo) {
+      throw new SendError(
+        "not_connected",
+        "Esta conversación todavía no tiene hilo en Zernio: se abre cuando el cliente escribe"
+      );
+    }
+    const recipient = row.contact.phone
+      ? normalizeRecipient(row.contact.phone)
+      : row.contact.waUserId ?? "";
+    return {
+      conversation: row.conversation,
+      credentials,
+      destinatario: null,
+      recipient,
+      hiloZernio: hilo,
+    };
+  }
+
   /**
    * 003 — El destinatario, en el campo que Meta espera para cada forma.
    *
@@ -304,12 +344,14 @@ export async function sendText(input: {
     ? await callInstagramSend(target, input.text)
     : target.messenger
       ? await callMessengerSend(target, input.text)
-      : await callGraphSend(credentials!, {
-          messaging_product: "whatsapp",
-          ...target.destinatario,
-          type: "text",
-          text: { body: input.text },
-        });
+      : target.hiloZernio
+        ? await callZernioWhatsappSend(target, input.text)
+        : await callGraphSend(credentials!, {
+            messaging_product: "whatsapp",
+            ...target.destinatario!,
+            type: "text",
+            text: { body: input.text },
+          });
 
   const messageId = await persistOutbound({
     organizationId: input.organizationId,
@@ -379,23 +421,35 @@ export async function sendMediaMessage(input: {
   const asset = assetRows[0]!;
 
   try {
-    const waMediaId = await uploadGraphMedia(credentials!, input.file);
-    await db
-      .update(schema.mediaAsset)
-      .set({ waMediaId, updatedAt: new Date() })
-      .where(eq(schema.mediaAsset.id, assetId));
+    let waMessageId: string;
+    if (target.hiloZernio) {
+      // Zernio recibe el binario y sube él mismo a la plataforma: no hay
+      // `waMediaId` de Graph que guardar, el archivo local es la copia durable.
+      waMessageId = await callZernioWhatsappMedia(
+        target,
+        kind,
+        input.file,
+        input.caption ?? null
+      );
+    } else {
+      const waMediaId = await uploadGraphMedia(credentials!, input.file);
+      await db
+        .update(schema.mediaAsset)
+        .set({ waMediaId, updatedAt: new Date() })
+        .where(eq(schema.mediaAsset.id, assetId));
 
-    const mediaPayload: Record<string, unknown> = { id: waMediaId };
-    if (input.caption && kind !== "audio") mediaPayload.caption = input.caption;
-    if (kind === "document" && input.file.fileName) {
-      mediaPayload.filename = input.file.fileName;
+      const mediaPayload: Record<string, unknown> = { id: waMediaId };
+      if (input.caption && kind !== "audio") mediaPayload.caption = input.caption;
+      if (kind === "document" && input.file.fileName) {
+        mediaPayload.filename = input.file.fileName;
+      }
+      waMessageId = await callGraphSend(credentials!, {
+        messaging_product: "whatsapp",
+        ...target.destinatario!,
+        type: kind,
+        [kind]: mediaPayload,
+      });
     }
-    const waMessageId = await callGraphSend(credentials!, {
-      messaging_product: "whatsapp",
-      ...target.destinatario,
-      type: kind,
-      [kind]: mediaPayload,
-    });
 
     const messageId = await persistOutbound({
       organizationId: input.organizationId,
@@ -475,22 +529,26 @@ export async function sendStructured(
     );
   }
 
-  const payload =
-    input.kind === "location"
-      ? { type: "location", location: input.location }
-      : {
-          type: "contacts",
-          contacts: input.contacts.map((c) => ({
-            name: { formatted_name: c.name, first_name: c.name },
-            phones: [{ phone: c.phone, type: "CELL" }],
-          })),
-        };
+  const contacts =
+    input.kind === "contacts"
+      ? input.contacts.map((c) => ({
+          name: { formatted_name: c.name, first_name: c.name },
+          phones: [{ phone: c.phone, type: "CELL" }],
+        }))
+      : null;
 
-  const waMessageId = await callGraphSend(target.credentials, {
-    messaging_product: "whatsapp",
-    ...target.destinatario,
-    ...payload,
-  });
+  const waMessageId = target.hiloZernio
+    ? await callZernioStructured(
+        target,
+        input.kind === "location" ? { location: input.location } : { contacts: contacts! }
+      )
+    : await callGraphSend(target.credentials, {
+        messaging_product: "whatsapp",
+        ...target.destinatario!,
+        ...(input.kind === "location"
+          ? { type: "location", location: input.location }
+          : { type: "contacts", contacts }),
+      });
 
   const db = getDb();
   const assetRows = await db
@@ -519,11 +577,114 @@ export async function sendStructured(
   return { messageId };
 }
 
+/**
+ * 023 — Envío de WhatsApp por Zernio.
+ *
+ * La dirección no es el número sino el hilo: `conversationId` opaco que llegó
+ * en el webhook entrante. Los acuses (`message.delivered`/`read`/`failed`) sí
+ * viajan por el `wamid` que Zernio devuelve aquí, así que ese id se guarda
+ * igual que el de la Graph API.
+ */
+async function callZernioWhatsappSend(
+  target: SendTarget,
+  text: string
+): Promise<string> {
+  const creds = target.credentials!;
+  try {
+    const res = await sendZernioMessage({
+      token: creds.token,
+      accountId: creds.accountRef,
+      conversationId: target.hiloZernio!,
+      text,
+    });
+    return res.platformMessageId;
+  } catch (err) {
+    throw await zernioSendError(err, creds.organizationId);
+  }
+}
+
+/** Adjunto saliente por Zernio: el binario viaja en el mismo request. */
+async function callZernioWhatsappMedia(
+  target: SendTarget,
+  kind: "image" | "video" | "audio" | "document",
+  file: { data: Buffer; mimeType: string; fileName?: string },
+  caption: string | null
+): Promise<string> {
+  const creds = target.credentials!;
+  try {
+    const res = await sendZernioAttachment({
+      token: creds.token,
+      accountId: creds.accountRef,
+      conversationId: target.hiloZernio!,
+      kind,
+      data: file.data,
+      fileName: file.fileName || `archivo_${kind}`,
+      mimeType: file.mimeType,
+      caption,
+    });
+    return res.platformMessageId;
+  } catch (err) {
+    throw await zernioSendError(err, creds.organizationId);
+  }
+}
+
+/** Ubicación o contactos por Zernio: el mismo cuerpo, sin la Graph API. */
+async function callZernioStructured(
+  target: SendTarget,
+  fields: { location?: LocationInput } | { contacts: unknown[] }
+): Promise<string> {
+  const creds = target.credentials!;
+  try {
+    const res = await sendZernioStructured({
+      token: creds.token,
+      accountId: creds.accountRef,
+      conversationId: target.hiloZernio!,
+      ...fields,
+    });
+    return res.platformMessageId;
+  } catch (err) {
+    throw await zernioSendError(err, creds.organizationId);
+  }
+}
+
+/**
+ * Zernio al vocabulario de SendError que la bandeja ya sabe mostrar. Una llave
+ * que dejó de servir (401) es lo mismo que un token de Meta vencido: se marca
+ * la conexión y se le pide al operador que la guarde otra vez.
+ */
+async function zernioSendError(
+  err: unknown,
+  organizationId: string
+): Promise<SendError> {
+  if (err instanceof MetaApiError) {
+    if (err.isAuthError) {
+      await markReconnectRequired(organizationId);
+      return new SendError(
+        "reconnect_required",
+        "La API key de Zernio ya no sirve: vuelve a guardarla en Configuración → WhatsApp"
+      );
+    }
+    if (err.status === 0 || err.status >= 500) {
+      return new SendError("meta_unavailable", "Zernio no está disponible ahora");
+    }
+    return new SendError("meta_error", err.message);
+  }
+  return err as SendError;
+}
+
 /** Llama a Graph /messages y traduce errores de Meta a SendError. */
 export async function callGraphSend(
   credentials: Credentials,
   payload: unknown
 ): Promise<string> {
+  if (!credentials.phoneNumberId) {
+    // Solo posible en modo Zernio, donde no hay Graph que llamar: si se llega
+    // aquí es un camino que no consultó `hablaPorZernio`.
+    throw new SendError(
+      "not_connected",
+      "Este número habla por Zernio y no tiene Phone Number ID de Meta"
+    );
+  }
   try {
     const res = await graphRequest<{ messages?: { id: string }[] }>(
       `${credentials.phoneNumberId}/messages`,

@@ -6,7 +6,7 @@ import {
   testConnection,
   type WebhookRegistration,
 } from "@/server/whatsapp/connect";
-import { saveCredentials } from "@/server/whatsapp/credentials";
+import { getCredentialsByOrg, hablaPorZernio, saveCredentials } from "@/server/whatsapp/credentials";
 import { webhookUrl, webhookVerifyToken } from "@/server/whatsapp/webhook-url";
 
 /**
@@ -201,6 +201,18 @@ export async function completarRegistroInsertado(input: {
   wabaId?: string;
   phoneNumberId?: string;
 }): Promise<ResultadoRegistro> {
+  // Un número que ya habla por Zernio no puede reescribirse con credenciales de
+  // Meta: la fila compartiría dos transportes y el webhook de Zernio se perdería.
+  const actuales = await getCredentialsByOrg(input.organizationId);
+  if (hablaPorZernio(actuales)) {
+    return {
+      ok: false,
+      code: "canal_zernio",
+      message:
+        "Este número está conectado por Zernio. Desconéctalo primero si quieres volver a Meta.",
+    };
+  }
+
   const intercambio = await intercambiarCodigo(input.code);
   if (!intercambio.ok) return intercambio;
   const { token } = intercambio;

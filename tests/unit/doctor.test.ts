@@ -229,6 +229,9 @@ describe("checkWhatsApp", () => {
   const credenciales = (token: string): Credentials => ({
     id: "cred_1",
     organizationId: "org_1",
+    source: "meta",
+    accountRef: null,
+    webhookSecret: null,
     wabaId: "waba1",
     phoneNumberId: "pn1",
     displayPhoneNumber: "+52 1 55 0000 0000",

@@ -3,6 +3,7 @@ import { apiError, parseBody, withAuth } from "@/lib/api";
 import {
   desconectarCanal,
   getCredentialsByOrg,
+  hablaPorZernio,
   saveCredentials,
   tokenLast4,
 } from "@/server/whatsapp/credentials";
@@ -24,8 +25,10 @@ export const GET = withAuth(async (session) => {
   if (!creds) return Response.json({ connection: null });
   return Response.json({
     connection: {
+      source: creds.source,
       wabaId: creds.wabaId,
       phoneNumberId: creds.phoneNumberId,
+      accountRef: creds.accountRef,
       displayPhoneNumber: creds.displayPhoneNumber,
       verifiedName: creds.verifiedName,
       status: creds.status,
@@ -52,6 +55,18 @@ const putSchema = z.object({
 export const PUT = withAuth(async (session, req: Request) => {
   const body = await parseBody(req, putSchema);
   if (!body.ok) return body.response;
+
+  // Guardar por Meta reescribiría la fila que hoy pertenece a Zernio: el
+  // número quedaría suscrito al webhook de Zernio y el CRM creería que habla
+  // por Graph. Desconectar primero es el camino explícito.
+  const actual = await getCredentialsByOrg(session.organizationId);
+  if (hablaPorZernio(actual)) {
+    return apiError(
+      409,
+      "canal_zernio",
+      "Este número está conectado por Zernio; desconéctalo antes de conectarlo por Meta"
+    );
+  }
 
   const check = await testConnection(body.data.phoneNumberId, body.data.token);
   if (!check.ok) {
@@ -95,7 +110,9 @@ export const PUT = withAuth(async (session, req: Request) => {
  */
 export const DELETE = withAuth(async (session) => {
   const creds = await getCredentialsByOrg(session.organizationId);
-  if (creds) {
+  // Un número por Zernio no tiene webhook que soltar en Meta: la suscripción
+  // la manda Zernio y se deshace en su panel, no aquí.
+  if (creds && !hablaPorZernio(creds) && creds.phoneNumberId) {
     await unregisterWebhookForNumber({
       phoneNumberId: creds.phoneNumberId,
       token: creds.token,

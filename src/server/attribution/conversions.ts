@@ -32,6 +32,8 @@ const NO_CLID_REASON =
   "sin ctwa_clid: la conversación no vino de un anuncio de WhatsApp";
 const NOT_CONFIGURED_REASON =
   "atribución no configurada: falta el dataset de Meta o la conexión de WhatsApp";
+const NO_WABA_REASON =
+  "el número está conectado por Zernio: no hay WABA de Meta a la que reportar el evento";
 
 type EmitOutcome = "sent" | "failed" | "skipped" | "dedup" | "error";
 
@@ -77,6 +79,7 @@ export async function emitConversion(
     const settings = await getCapiSettings(organizationId);
     const credentials = await getCredentialsByOrg(organizationId);
 
+    const wabaId = credentials?.wabaId ?? null;
     if (!attribution?.ctwaClid || !settings || !credentials) {
       await db
         .update(schema.conversionEvent)
@@ -84,6 +87,17 @@ export async function emitConversion(
           status: "skipped",
           attributionId: attribution?.id ?? null,
           error: !attribution?.ctwaClid ? NO_CLID_REASON : NOT_CONFIGURED_REASON,
+        })
+        .where(eq(schema.conversionEvent.id, event.id));
+      return "skipped";
+    }
+    if (!wabaId) {
+      await db
+        .update(schema.conversionEvent)
+        .set({
+          status: "skipped",
+          attributionId: attribution?.id,
+          error: NO_WABA_REASON,
         })
         .where(eq(schema.conversionEvent.id, event.id));
       return "skipped";
@@ -97,7 +111,7 @@ export async function emitConversion(
           eventName,
           eventTime: Math.floor(Date.now() / 1000),
           ctwaClid: attribution.ctwaClid,
-          wabaId: credentials.wabaId,
+          wabaId,
           customData,
         },
       });

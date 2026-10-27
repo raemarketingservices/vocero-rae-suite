@@ -13,6 +13,7 @@ import { publish } from "@/server/events/bus";
 import {
   getCredentialsByOrg,
   getCredentialsByWabaId,
+  hablaPorZernio,
   markReconnectRequired,
 } from "@/server/whatsapp/credentials";
 import { callGraphSend, SendError } from "@/server/inbox/send";
@@ -27,7 +28,9 @@ export class TemplateError extends Error {
     | "invalid"
     | "not_found"
     | "meta_error"
-    | "meta_unavailable";
+    | "meta_unavailable"
+    /** 023: la superficie no existe en este transporte (Zernio). */
+    | "not_supported";
 
   constructor(code: TemplateError["code"], message: string) {
     super(message);
@@ -39,6 +42,7 @@ export class TemplateError extends Error {
 const TEMPLATE_ERROR_STATUS: Record<TemplateError["code"], number> = {
   not_connected: 409,
   reconnect_required: 409,
+  not_supported: 409,
   invalid: 422,
   not_found: 404,
   meta_error: 422,
@@ -86,6 +90,15 @@ export async function createTemplate(
   }
   if (creds.status === "reconnect_required") {
     throw new TemplateError("reconnect_required", "Reconecta tu número antes de crear plantillas");
+  }
+  // 023: el ciclo de vida de una plantilla (creación, aprobación, sincronizado)
+  // es de la WABA de Meta. Con el número en Zernio no hay WABA que llamar, y
+  // sus plantillas se aprueban en el panel de Meta, no aquí.
+  if (hablaPorZernio(creds)) {
+    throw new TemplateError(
+      "not_supported",
+      "Las plantillas se crean y se aprueban en Meta; este número habla por Zernio y Vocero no puede gestionarlas"
+    );
   }
 
   const name = input.name
@@ -193,6 +206,12 @@ export async function syncTemplates(organizationId: string): Promise<number> {
   const creds = await getCredentialsByOrg(organizationId);
   if (!creds) {
     throw new TemplateError("not_connected", "Conecta tu número de WhatsApp primero");
+  }
+  if (hablaPorZernio(creds)) {
+    throw new TemplateError(
+      "not_supported",
+      "Sin WABA de Meta no hay plantillas que sincronizar; este número habla por Zernio"
+    );
   }
 
   let data: {
@@ -350,6 +369,15 @@ export async function sendTemplate(input: {
   if (!creds) throw new TemplateError("not_connected", "Sin número conectado");
   if (creds.status === "reconnect_required") {
     throw new TemplateError("reconnect_required", "Reconecta el número");
+  }
+  // 023: Zernio puede mandar plantillas aprobadas, pero la aprobación sigue
+  // siendo de la WABA de Meta y Vocero no tiene cómo listarlas sin ella. Antes
+  // de abrir ese camino hay que decidir de dónde salen los nombres.
+  if (hablaPorZernio(creds)) {
+    throw new TemplateError(
+      "not_supported",
+      "Por Zernio todavía no se pueden enviar plantillas; espera la respuesta del cliente para escribir libre"
+    );
   }
 
   // 003: destinatario = teléfono normalizado o BSUID.
