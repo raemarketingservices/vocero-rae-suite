@@ -12,7 +12,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const session = vi.hoisted(() => ({
   current: { userId: "usr_1", organizationId: "org_a", role: "owner" },
 }));
-const save = vi.hoisted(() => vi.fn(async () => {}));
+const save = vi.hoisted(() =>
+  vi.fn(async (_input: Record<string, unknown>) => {})
+);
 const disconnect = vi.hoisted(() => vi.fn(async () => {}));
 const list = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
 const creds = vi.hoisted(() => ({
@@ -43,7 +45,20 @@ import { MetaApiError } from "@/lib/meta/client";
 import { DELETE, GET, PUT } from "@/app/api/settings/whatsapp/zernio/route";
 
 const ACCOUNT = "665f1c2e8b3a4d0012345678";
+const SANDBOX = "6a180a034c7f364ffded3c9c";
 const KEY = "zrk_abcdef123456";
+
+/** Una cuenta de WhatsApp como las devuelve `listZernioAccounts`. */
+function cuenta(id: string, name: string, phoneNumber: string | null) {
+  return {
+    id,
+    name,
+    phoneNumber,
+    sandbox: false,
+    isActive: true,
+    needsReconnection: false,
+  };
+}
 
 function put(body: unknown) {
   return PUT(
@@ -72,7 +87,7 @@ beforeEach(() => {
 describe("el alta", () => {
   it("con una sola cuenta la conecta sin pedir el accountId", async () => {
     list.mockResolvedValueOnce([
-      { id: ACCOUNT, name: "Uniko RD", isActive: true, needsReconnection: false },
+      cuenta(ACCOUNT, "Uniko RD", "+1 849 627 9994"),
     ]);
     const res = await put({ token: KEY, webhookSecret: "secreto-hmac" });
     expect(res.status).toBe(200);
@@ -84,28 +99,54 @@ describe("el alta", () => {
       accountRef: ACCOUNT,
       webhookSecret: "secreto-hmac",
       token: KEY,
-      displayPhoneNumber: "Uniko RD",
+      displayPhoneNumber: "+1 849 627 9994",
       verifiedName: null,
     });
   });
 
+  /**
+   * El número de pruebas compartido de Zernio NO aparece en `/accounts` salvo
+   * que se pida `includeSandbox`: sin este camino, conectar el sandbox para
+   * probar el canal era imposible (verificado contra el servicio real).
+   */
+  it("el sandbox se lista y se guarda marcado como pruebas", async () => {
+    list.mockResolvedValueOnce([
+      {
+        ...cuenta(SANDBOX, "Zernio Sandbox", "+12029087457"),
+        sandbox: true,
+      },
+    ]);
+    const res = await put({ token: KEY, sandbox: true });
+    expect(res.status).toBe(200);
+    expect(list).toHaveBeenCalledWith(KEY, "whatsapp", { sandbox: true });
+    expect(save.mock.calls[0]![0]).toMatchObject({
+      accountRef: SANDBOX,
+      verifiedName: "Sandbox de Zernio",
+    });
+  });
+
+  it("sin pedirlo, la lista se consulta sin el sandbox", async () => {
+    list.mockResolvedValueOnce([cuenta(ACCOUNT, "Uniko RD", "+1 849 627 9994")]);
+    await put({ token: KEY });
+    expect(list).toHaveBeenCalledWith(KEY, "whatsapp", { sandbox: false });
+  });
+
   it("con varios números responde 409 con la lista, en lugar de elegir uno al azar", async () => {
     list.mockResolvedValueOnce([
-      { id: ACCOUNT, name: "Uniko RD", isActive: true, needsReconnection: false },
-      { id: "otra", name: "Impulsa", isActive: true, needsReconnection: false },
+      cuenta(ACCOUNT, "Uniko RD", "+1 849 627 9994"),
+      cuenta("otra", "Impulsa", "+18095551122"),
     ]);
     const res = await put({ token: KEY });
     expect(res.status).toBe(409);
     const data = await res.json();
     expect(data.error.code).toBe("varias_cuentas");
     expect(data.cuentas).toHaveLength(2);
+    expect(data.cuentas[0].phoneNumber).toBe("+1 849 627 9994");
     expect(save).not.toHaveBeenCalled();
   });
 
   it("un accountId que no está en la llave se rechaza con 422", async () => {
-    list.mockResolvedValueOnce([
-      { id: ACCOUNT, name: "Uniko RD", isActive: true, needsReconnection: false },
-    ]);
+    list.mockResolvedValueOnce([cuenta(ACCOUNT, "Uniko RD", "+1 849 627 9994")]);
     const res = await put({ token: KEY, accountRef: "665f00000000000000000000" });
     expect(res.status).toBe(422);
     expect((await res.json()).error.code).toBe("cuenta_no_encontrada");

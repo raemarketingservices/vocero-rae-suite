@@ -326,6 +326,10 @@ export async function verifyZernioToken(token: string): Promise<void> {
 export type ZernioAccount = {
   id: string;
   name: string | null;
+  /** El número en pantalla, cuando la cuenta es un teléfono. */
+  phoneNumber: string | null;
+  /** El número compartido de pruebas de Zernio, no un número del cliente. */
+  sandbox: boolean;
   isActive: boolean;
   needsReconnection: boolean;
 };
@@ -333,33 +337,48 @@ export type ZernioAccount = {
 /**
  * Cuentas conectadas de una plataforma.
  *
- * Con `platform=whatsapp` Zernio lista la cuenta de WhatsApp sandbox cuando el
- * equipo la tiene activa y `includeSandbox` no se pide; no se filtra nada más,
- * porque las cuentas internas `sms`/`phone` que acompañan a un número ya las
- * saca el filtro de plataforma.
+ * Verificado contra el servicio real el 2026-10-26: con `platform=whatsapp` y
+ * sin más parámetros Zernio responde `{"accounts":[]}` para un equipo que solo
+ * tiene el sandbox — el número de pruebas **no entra en la lista** hasta que se
+ * pide `includeSandbox`, y por eso es un argumento explícito y no un default:
+ * ofrecerlo por defecto conectaría sin querer un número compartido entre todos
+ * los que prueban.
  */
 export async function listZernioAccounts(
   token: string,
-  platform: string
+  platform: string,
+  opts: { sandbox?: boolean } = {}
 ): Promise<ZernioAccount[]> {
   const res = await zernioFetch(
-    `/accounts?platform=${encodeURIComponent(platform)}`,
+    `/accounts?platform=${encodeURIComponent(platform)}` +
+      (opts.sandbox ? "&includeSandbox=true" : ""),
     { token }
   );
   const rows = (res as { accounts?: unknown[] } | null)?.accounts ?? [];
   return rows
     .map((r) => r as Partial<Record<string, unknown>> | null)
     .filter((r) => typeof r?._id === "string" && r._id !== "")
-    .map((r) => ({
-      id: String(r!._id),
-      name:
-        (typeof r!.displayName === "string" && r!.displayName) ||
-        (typeof r!.username === "string" && r!.username) ||
-        (typeof r!.platformUserId === "string" && r!.platformUserId) ||
-        null,
-      isActive: r!.isActive !== false,
-      needsReconnection: r!.needsReconnection === true,
-    }));
+    .map((r) => {
+      const meta = (r!.metadata ?? {}) as Partial<Record<string, unknown>>;
+      const telefono = (v: unknown) =>
+        typeof v === "string" && v ? v : null;
+      return {
+        id: String(r!._id),
+        name:
+          (typeof r!.displayName === "string" && r!.displayName) ||
+          (typeof r!.username === "string" && r!.username) ||
+          (typeof r!.platformUserId === "string" && r!.platformUserId) ||
+          null,
+        phoneNumber:
+          telefono(meta.displayPhoneNumber) ??
+          (typeof r!.username === "string" && r!.username.startsWith("+")
+            ? r!.username
+            : null),
+        sandbox: meta.isSandbox === true,
+        isActive: r!.isActive !== false,
+        needsReconnection: r!.needsReconnection === true,
+      };
+    });
 }
 
 /**

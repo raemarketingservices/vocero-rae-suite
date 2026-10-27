@@ -8,7 +8,7 @@ import {
   saveCredentials,
   tokenLast4,
 } from "@/server/whatsapp/credentials";
-import { listZernioAccounts } from "@/server/zernio";
+import { listZernioAccounts, type ZernioAccount } from "@/server/zernio";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +51,12 @@ const putSchema = z.object({
   /** Si falta y la llave tiene una sola cuenta de WhatsApp, se usa esa. */
   accountRef: z.string().trim().min(1).nullish(),
   webhookSecret: z.string().trim().min(1).nullish(),
+  /**
+   * Añade el número de pruebas compartido de Zernio a la lista. Pedir la
+   * conexión real nunca lo trae: conectarse al sandbox por accidente mandaría
+   * los mensajes de una tienda al número de otro.
+   */
+  sandbox: z.boolean().optional(),
 });
 
 /**
@@ -79,9 +85,11 @@ export const PUT = withAuth(async (session, req: Request) => {
     );
   }
 
-  let cuentas: Awaited<ReturnType<typeof listZernioAccounts>>;
+  let cuentas: ZernioAccount[];
   try {
-    cuentas = await listZernioAccounts(data.token, "whatsapp");
+    cuentas = await listZernioAccounts(data.token, "whatsapp", {
+      sandbox: data.sandbox === true,
+    });
   } catch (err) {
     return errorDeZernio(err);
   }
@@ -110,15 +118,16 @@ export const PUT = withAuth(async (session, req: Request) => {
     accountRef: elegida.cuenta.id,
     webhookSecret: data.webhookSecret ?? null,
     token: data.token,
-    displayPhoneNumber: elegida.cuenta.name,
-    verifiedName: null,
+    displayPhoneNumber: elegida.cuenta.phoneNumber ?? elegida.cuenta.name,
+    verifiedName: elegida.cuenta.sandbox ? "Sandbox de Zernio" : null,
   });
 
   return Response.json({
     ok: true,
     connection: pintaConexion({
       accountRef: elegida.cuenta.id,
-      displayPhoneNumber: elegida.cuenta.name,
+      displayPhoneNumber:
+        elegida.cuenta.phoneNumber ?? elegida.cuenta.name,
       status: "connected",
       token: data.token,
     }),
@@ -144,7 +153,7 @@ export const DELETE = withAuth(async (session) => {
 });
 
 type Eleccion =
-  | { ok: true; cuenta: { id: string; name: string | null } }
+  | { ok: true; cuenta: ZernioAccount }
   | { ok: false; status: number; code: string; message: string; cuentas?: unknown };
 
 /**
@@ -153,7 +162,7 @@ type Eleccion =
  * qué tienda pertenece la llave.
  */
 function elegirCuenta(
-  cuentas: Awaited<ReturnType<typeof listZernioAccounts>>,
+  cuentas: ZernioAccount[],
   accountRef: string | null
 ): Eleccion {
   if (accountRef) {
@@ -176,7 +185,7 @@ function elegirCuenta(
       status: 422,
       code: "sin_cuentas",
       message:
-        "Esta API key no tiene ninguna cuenta de WhatsApp conectada. Vincula el número en Zernio y vuelve a intentar.",
+        "Esta API key no tiene ninguna cuenta de WhatsApp conectada. Vincula el número en Zernio y vuelve a intentar; si solo quieres probar, activa el número de pruebas.",
     };
   }
   if (cuentas.length > 1) {
@@ -189,6 +198,8 @@ function elegirCuenta(
       cuentas: cuentas.map((c) => ({
         id: c.id,
         name: c.name,
+        phoneNumber: c.phoneNumber,
+        sandbox: c.sandbox,
         needsReconnection: c.needsReconnection,
       })),
     };

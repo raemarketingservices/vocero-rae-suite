@@ -249,11 +249,18 @@ describe("el transporte saliente", () => {
 });
 
 describe("las cuentas de Zernio para dar de alta", () => {
-  it("filtra por plataforma y traduce `_id`, nombre y salud", async () => {
+  it("filtra por plataforma y traduce `_id`, nombre, número y salud", async () => {
     fetchMock.mockResolvedValueOnce(
       json({
         accounts: [
-          { _id: ACCOUNT, platform: "whatsapp", displayName: "Uniko RD", isActive: true },
+          {
+            _id: ACCOUNT,
+            platform: "whatsapp",
+            displayName: "Uniko RD",
+            username: "+18496279994",
+            isActive: true,
+            metadata: { displayPhoneNumber: "+1 849 627 9994" },
+          },
           { _id: "otro", platform: "whatsapp", username: "+12029087457", isActive: false, needsReconnection: true },
           { _id: "", platform: "whatsapp" },
         ],
@@ -264,9 +271,53 @@ describe("las cuentas de Zernio para dar de alta", () => {
     expect(llamada()[0]).toBe(`${ZERNIO_BASE}/accounts?platform=whatsapp`);
     expect(llamada()[1].headers.Authorization).toBe("Bearer zrk_llave");
     expect(cuentas).toEqual([
-      { id: ACCOUNT, name: "Uniko RD", isActive: true, needsReconnection: false },
-      { id: "otro", name: "+12029087457", isActive: false, needsReconnection: true },
+      {
+        id: ACCOUNT,
+        name: "Uniko RD",
+        phoneNumber: "+1 849 627 9994",
+        sandbox: false,
+        isActive: true,
+        needsReconnection: false,
+      },
+      {
+        id: "otro",
+        name: "+12029087457",
+        phoneNumber: "+12029087457",
+        sandbox: false,
+        isActive: false,
+        needsReconnection: true,
+      },
     ]);
+  });
+
+  /**
+   * La forma real de la respuesta del 2026-10-26: sin `includeSandbox` Zernio
+   * responde `{"accounts":[]}` para un equipo que solo tiene el número de
+   * pruebas, así que pedirlo tiene que cambiar la URL.
+   */
+  it("el sandbox solo aparece cuando se pide", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({
+        accounts: [
+          {
+            _id: "6a180a034c7f364ffded3c9c",
+            platform: "whatsapp",
+            displayName: "Zernio Sandbox",
+            username: "+12029087457",
+            isActive: true,
+            metadata: { isSandbox: true, displayPhoneNumber: "+12029087457" },
+          },
+        ],
+      })
+    );
+    const cuentas = await listZernioAccounts("zrk_llave", "whatsapp", {
+      sandbox: true,
+    });
+    expect(llamada()[0]).toBe(
+      `${ZERNIO_BASE}/accounts?platform=whatsapp&includeSandbox=true`
+    );
+    expect(cuentas[0]?.sandbox).toBe(true);
+    expect(cuentas[0]?.phoneNumber).toBe("+12029087457");
   });
 
   it("sin `accounts` en la respuesta no hay cuentas, no un crash", async () => {

@@ -31,7 +31,13 @@ export type ZernioConnection = {
   tokenLast4: string;
 };
 
-type Cuenta = { id: string; name: string | null; needsReconnection: boolean };
+type Cuenta = {
+  id: string;
+  name: string | null;
+  phoneNumber: string | null;
+  sandbox: boolean;
+  needsReconnection: boolean;
+};
 
 export function WhatsappZernioCard({
   existing,
@@ -46,6 +52,7 @@ export function WhatsappZernioCard({
   const [token, setToken] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
   const [cuentas, setCuentas] = useState<Cuenta[] | null>(null);
+  const [sandbox, setSandbox] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -62,6 +69,7 @@ export function WhatsappZernioCard({
         token: token.trim(),
         accountRef: (accountElegida ?? accountRef).trim() || null,
         webhookSecret: webhookSecret.trim() || null,
+        sandbox,
       }),
     }).catch(() => null);
     setSaving(false);
@@ -158,6 +166,20 @@ export function WhatsappZernioCard({
           />
         </div>
 
+        <label className="flex items-start gap-2 text-xs text-text-2">
+          <input
+            type="checkbox"
+            checked={sandbox}
+            onChange={(e) => setSandbox(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-brand"
+          />
+          <span>
+            Incluir el número de pruebas compartido de Zernio (sandbox) en la
+            lista. Solo para montar la conexión antes de tener número propio:
+            nadie más escribe ahí.
+          </span>
+        </label>
+
         {cuentas && cuentas.length > 0 && (
           <div className="space-y-2 rounded-md border bg-background p-3">
             <p className="text-sm font-medium">
@@ -182,8 +204,11 @@ export function WhatsappZernioCard({
                   )}
                 >
                   <span className="min-w-0 flex-1 truncate">
-                    {c.name ?? "sin nombre"}
+                    {c.phoneNumber ?? c.name ?? "sin nombre"}
                   </span>
+                  {c.sandbox && (
+                    <span className="text-xs text-warning-text">pruebas</span>
+                  )}
                   {c.needsReconnection && (
                     <span className="text-xs text-warning-text">
                       necesita reconectar
