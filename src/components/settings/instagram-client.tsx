@@ -93,8 +93,8 @@ export function InstagramClient() {
     if (c) {
       setConnection(c.connection);
       if (c.connection) {
-        setSource(c.connection.source as Source);
-        setIgUserId(c.connection.igUserId ?? "");
+        setSource(c.connection.source);
+        setIgUserId(c.connection.igUserId);
         if (c.connection.accountRef) setAccountRef(c.connection.accountRef);
       }
     }
