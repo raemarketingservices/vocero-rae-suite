@@ -531,7 +531,13 @@ export const metaCredentials = pgTable(
     // El webhook de Meta enruta por phone_number_id: único en la instancia.
     // Los nulos de las filas de Zernio no chocan entre sí en Postgres.
     uniqueIndex("meta_credentials_phone_uq").on(t.phoneNumberId),
-    index("meta_credentials_account_ref_idx").on(t.accountRef),
+    // 024 — El webhook de Zernio enruta por account_ref, así que un mismo
+    // número no puede pertenecer a dos tiendas: la segunda fila convertiría el
+    // reparto en una lotería (`getCredentialsByAccountRef` lee con limit(1)).
+    // Es además la única defensa cuando varias organizaciones comparten una
+    // API key de Zernio, porque el resto de la validación se hace con el token
+    // que llega del navegador. Los nulos de las filas de Meta no chocan.
+    uniqueIndex("meta_credentials_account_ref_uq").on(t.accountRef),
   ]
 );
 

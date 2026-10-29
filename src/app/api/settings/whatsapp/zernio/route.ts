@@ -3,6 +3,7 @@ import { apiError, parseBody, withAuth } from "@/lib/api";
 import { MetaApiError } from "@/lib/meta/client";
 import {
   desconectarCanal,
+  getCredentialsByAccountRef,
   getCredentialsByOrg,
   hablaPorZernio,
   saveCredentials,
@@ -104,6 +105,29 @@ export const PUT = withAuth(async (session, req: Request) => {
         ...(elegida.cuentas ? { cuentas: elegida.cuentas } : {}),
       },
       { status: elegida.status }
+    );
+  }
+
+  /**
+   * 024 — Un número, una tienda.
+   *
+   * Varias organizaciones pueden pegar la MISMA API key de Zernio (la de RAE,
+   * si un cliente no trae la suya) y esa key lista todos los números. Sin esta
+   * guarda, conectar el número de la tienda A desde la tienda B no da error:
+   * simplemente gana la fila que `getCredentialsByAccountRef` encuentre primera
+   * — que sin `ORDER BY` es la que Postgres tenga a bien devolver — y desde ese
+   * momento una de las dos bandejas deja de recibir mensajes. Es el fallo más
+   * difícil de ver del CRM, porque todo lo demás sigue funcionando.
+   *
+   * El índice único de `0018_cuenta_zernio_unica` es el seguro; esto es el
+   * cartel, para que el propietario entienda qué tiene que desconectar.
+   */
+  const dueña = await getCredentialsByAccountRef(elegida.cuenta.id);
+  if (dueña && dueña.organizationId !== session.organizationId) {
+    return apiError(
+      409,
+      "cuenta_ya_conectada",
+      "Ese número de Zernio ya está conectado a otra tienda. Desconéctalo allí antes de traerlo aquí."
     );
   }
 

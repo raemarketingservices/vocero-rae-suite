@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *
  * Lo que se prueba es lo que no debe pasar nunca: que una llave inválida llegue
  * a la base, que un número conectado por Meta se reescriba con credenciales de
- * Zernio (o al revés), que alguien que no es el propietario conecte el canal, y
- * que la llave completa salga hacia el navegador.
+ * Zernio (o al revés), que alguien que no es el propietario conecte el canal,
+ * que un número ya reclamado por otra tienda se le entregue a una segunda, y que
+ * la llave completa salga hacia el navegador.
  */
 
 const session = vi.hoisted(() => ({
@@ -26,6 +27,10 @@ const creds = vi.hoisted(() => ({
     displayPhoneNumber: string | null;
   },
 }));
+/** A quién pertenece ya el `accountId` que se quiere conectar (024). */
+const dueñaDelNumero = vi.hoisted(() => ({
+  current: null as null | { organizationId: string },
+}));
 
 vi.mock("@/lib/auth/session", () => ({
   UnauthorizedError: class UnauthorizedError extends Error {},
@@ -34,6 +39,7 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("@/server/whatsapp/credentials", () => ({
   desconectarCanal: disconnect,
+  getCredentialsByAccountRef: async () => dueñaDelNumero.current,
   getCredentialsByOrg: async () => creds.current,
   hablaPorZernio: (c: { source?: string } | null) => c?.source === "zernio",
   saveCredentials: save,
@@ -81,6 +87,7 @@ beforeEach(() => {
   list.mockReset();
   list.mockResolvedValue([]);
   creds.current = null;
+  dueñaDelNumero.current = null;
   session.current = { userId: "usr_1", organizationId: "org_a", role: "owner" };
 });
 
@@ -204,6 +211,37 @@ describe("el alta", () => {
     expect((await res.json()).error.code).toBe("canal_meta");
     expect(list).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 024 — El agujero multi-tenant. Con la API key de RAE en dos tiendas, la
+   * segunda puede pedir el número de la primera: si se guarda, el webhook deja
+   * de saber a quién entregarle los mensajes. Sin guarda esto devolvía 200.
+   */
+  it("no entrega un número que ya está conectado a otra tienda", async () => {
+    list.mockResolvedValueOnce([
+      cuenta(ACCOUNT, "Uniko RD", "+1 849 627 9994"),
+    ]);
+    dueñaDelNumero.current = { organizationId: "org_b" };
+    const res = await put({ token: KEY });
+    expect(res.status).toBe(409);
+    const data = await res.json();
+    expect(data.error.code).toBe("cuenta_ya_conectada");
+    expect(JSON.stringify(data)).not.toContain("org_b");
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("a la misma tienda sí le deja re-salvar su propio número", async () => {
+    list.mockResolvedValueOnce([
+      cuenta(ACCOUNT, "Uniko RD", "+1 849 627 9994"),
+    ]);
+    dueñaDelNumero.current = { organizationId: "org_a" };
+    const res = await put({ token: KEY, webhookSecret: "secreto-hmac" });
+    expect(res.status).toBe(200);
+    expect(save.mock.calls[0]![0]).toMatchObject({
+      organizationId: "org_a",
+      accountRef: ACCOUNT,
+    });
   });
 });
 
