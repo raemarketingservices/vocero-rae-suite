@@ -17,6 +17,15 @@ const saveIg = vi.hoisted(() => vi.fn(async (_input: Record<string, unknown>) =>
 const saveMsg = vi.hoisted(() => vi.fn(async (_input: Record<string, unknown>) => {}));
 /** Dueño del accountId que se está intentando conectar. */
 const dueña = vi.hoisted(() => ({ current: null as null | { organizationId: string } }));
+/** Cuentas que Zernio lista para la llave que se pegó. */
+const cuentas = vi.hoisted(() => ({
+  current: [] as {
+    id: string;
+    name: string | null;
+    platformUserId: string | null;
+  }[],
+}));
+const lista = vi.hoisted(() => vi.fn(async (_token: string, _platform: string) => cuentas.current));
 const fetchSpy = vi.hoisted(() => vi.fn(async () => ({ ok: true, json: async () => ({}) })));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -42,6 +51,7 @@ vi.mock("@/server/messenger/credentials", () => ({
 }));
 vi.mock("@/server/zernio", () => ({
   verifyZernioToken: vi.fn(async () => true),
+  listZernioAccounts: lista,
 }));
 
 import { PUT as putInstagram } from "@/app/api/settings/instagram/route";
@@ -64,6 +74,9 @@ beforeEach(() => {
   saveIg.mockClear();
   saveMsg.mockClear();
   dueña.current = null;
+  cuentas.current = [
+    { id: ACCOUNT, name: "tienda.demo", platformUserId: "17841400000000000" },
+  ];
   session.current = { userId: "usr_1", organizationId: "org_a", role: "owner" };
   vi.stubGlobal("fetch", fetchSpy);
   fetchSpy.mockClear();
@@ -75,11 +88,12 @@ describe("Instagram por Zernio", () => {
     const res = await put(
       putInstagram,
       "/api/settings/instagram",
-      { source: "zernio", igUserId: "1784", accountRef: ACCOUNT, token: KEY }
+      { source: "zernio", accountRef: ACCOUNT, token: KEY }
     );
     expect(res.status).toBe(409);
     expect((await res.json()).error.code).toBe("cuenta_ya_conectada");
     expect(fetchSpy).not.toHaveBeenCalled();
+    expect(lista).not.toHaveBeenCalled();
     expect(saveIg).not.toHaveBeenCalled();
   });
 
@@ -87,11 +101,11 @@ describe("Instagram por Zernio", () => {
     for (const dueñaDe of [null, { organizationId: "org_a" }]) {
       saveIg.mockClear();
       dueña.current = dueñaDe;
-      const res = await put(
-        putInstagram,
-        "/api/settings/instagram",
-        { source: "zernio", igUserId: "1784", accountRef: ACCOUNT, token: KEY }
-      );
+      const res = await put(putInstagram, "/api/settings/instagram", {
+        source: "zernio",
+        accountRef: ACCOUNT,
+        token: KEY,
+      });
       expect(res.status).toBe(200);
       expect(saveIg.mock.calls[0]![0]).toMatchObject({
         organizationId: "org_a",
@@ -100,14 +114,77 @@ describe("Instagram por Zernio", () => {
     }
   });
 
-  it("en modo Zernio sin accountId no hay nada que guardar", async () => {
+  /**
+   * El IG_ID es el que enruta el webhook de Meta, y aquí es el que Zernio
+   * reporta: el tecleado por el navegador se ignora.
+   */
+  it("el IG_ID guardado es el de la cuenta listada, no el que se escribió", async () => {
     const res = await put(putInstagram, "/api/settings/instagram", {
       source: "zernio",
-      igUserId: "1784",
+      igUserId: "9999-escrito-a-mano",
+      accountRef: ACCOUNT,
+      token: KEY,
+    });
+    expect(res.status).toBe(200);
+    expect(saveIg.mock.calls[0]![0].igUserId).toBe("17841400000000000");
+  });
+
+  it("con un solo perfil y sin accountId conecta ese", async () => {
+    const res = await put(putInstagram, "/api/settings/instagram", {
+      source: "zernio",
+      token: KEY,
+    });
+    expect(res.status).toBe(200);
+    expect(saveIg.mock.calls[0]![0]).toMatchObject({ accountRef: ACCOUNT });
+  });
+
+  it("con varios perfiles y sin accountId devuelve la lista para elegir", async () => {
+    cuentas.current = [
+      ...cuentas.current,
+      { id: "acc_otra", name: "otra.cuenta", platformUserId: "1784" },
+    ];
+    const res = await put(putInstagram, "/api/settings/instagram", {
+      source: "zernio",
+      token: KEY,
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("varias_cuentas");
+    expect(body.cuentas).toHaveLength(2);
+    expect(saveIg).not.toHaveBeenCalled();
+  });
+
+  it("una llave sin Instagram no deja guardar nada", async () => {
+    cuentas.current = [];
+    const res = await put(putInstagram, "/api/settings/instagram", {
+      source: "zernio",
       token: KEY,
     });
     expect(res.status).toBe(422);
-    expect((await res.json()).error.code).toBe("invalid_body");
+    expect((await res.json()).error.code).toBe("sin_cuentas");
+    expect(saveIg).not.toHaveBeenCalled();
+  });
+
+  it("un accountId que no está en la llave se rechaza", async () => {
+    const res = await put(putInstagram, "/api/settings/instagram", {
+      source: "zernio",
+      accountRef: "acc_que_no_existe",
+      token: KEY,
+    });
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("cuenta_no_encontrada");
+    expect(saveIg).not.toHaveBeenCalled();
+  });
+
+  it("sin IG_ID reportado por Zernio no se guarda una conexión a ciegas", async () => {
+    cuentas.current = [{ id: ACCOUNT, name: null, platformUserId: null }];
+    const res = await put(putInstagram, "/api/settings/instagram", {
+      source: "zernio",
+      accountRef: ACCOUNT,
+      token: KEY,
+    });
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("ig_user_id_falta");
     expect(saveIg).not.toHaveBeenCalled();
   });
 
@@ -120,6 +197,16 @@ describe("Instagram por Zernio", () => {
     });
     expect(res.status).toBe(200);
     expect(saveIg).toHaveBeenCalled();
+  });
+
+  it("el modo Meta sin IG_ID no tiene de dónde sacar el perfil", async () => {
+    const res = await put(putInstagram, "/api/settings/instagram", {
+      source: "meta",
+      token: "IGQVJ",
+    });
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("invalid_body");
+    expect(saveIg).not.toHaveBeenCalled();
   });
 });
 

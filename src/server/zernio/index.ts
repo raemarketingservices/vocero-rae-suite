@@ -328,6 +328,13 @@ export type ZernioAccount = {
   name: string | null;
   /** El número en pantalla, cuando la cuenta es un teléfono. */
   phoneNumber: string | null;
+  /**
+   * El id de la plataforma: el IG_ID en Instagram, la página en Facebook, el
+   * número en WhatsApp. Instagram necesita el suyo para enrutar el webhook, y
+   * Zernio ya lo devuelve — pedírselo escrito al usuario era un campo de más
+   * que se equivoca al teclear.
+   */
+  platformUserId: string | null;
   /** El número compartido de pruebas de Zernio, no un número del cliente. */
   sandbox: boolean;
   isActive: boolean;
@@ -374,6 +381,7 @@ export async function listZernioAccounts(
           (typeof r!.username === "string" && r!.username.startsWith("+")
             ? r!.username
             : null),
+        platformUserId: telefono(r!.platformUserId),
         sandbox: meta.isSandbox === true,
         isActive: r!.isActive !== false,
         needsReconnection: r!.needsReconnection === true,

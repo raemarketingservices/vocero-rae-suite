@@ -112,22 +112,25 @@ export type SettingsSection = {
  * con ellos y lo que es del negocio. Una pestaña por canal no escala; una
  * sección por canal, sí: cada canal nuevo cae en "Canales" sin tocar el resto.
  *
- * Instagram no tiene pantalla propia todavía: sus credenciales se guardan
- * por API (`/api/settings/instagram`). Cuando la tenga, va aquí tras
- * `CHANNELS`, igual que Messenger.
+ * Los canales opcionales van en el orden en que se encienden: WhatsApp siempre,
+ * e Instagram y Messenger solo si `CHANNELS` los trae (ADR-001).
  */
 export function settingsSections({
   agenda = false,
   atribucion = false,
+  instagram = false,
   messenger = false,
 }: {
   agenda?: boolean;
   /** 016 — "Anuncios" existe solo con la bandera ATRIBUCION. */
   atribucion?: boolean;
+  /** 014 — "Instagram" solo si el canal está encendido con CHANNELS. */
+  instagram?: boolean;
   /** 017 — "Messenger" solo si el canal está encendido con CHANNELS. */
   messenger?: boolean;
 }): SettingsSection[] {
   const canales: SettingsLink[] = [{ href: "/settings/whatsapp", label: "WhatsApp" }];
+  if (instagram) canales.push({ href: "/settings/instagram", label: "Instagram" });
   if (messenger) canales.push({ href: "/settings/messenger", label: "Messenger" });
 
   // #85 — el proveedor de IA se configura aquí; el entorno queda de respaldo.

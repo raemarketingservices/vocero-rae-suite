@@ -18,14 +18,16 @@ import { settingsSections } from "@/lib/nav";
 export function SettingsNav({
   agenda = false,
   atribucion = false,
+  instagram = false,
   messenger = false,
 }: {
   agenda?: boolean;
   atribucion?: boolean;
+  instagram?: boolean;
   messenger?: boolean;
 }) {
   const pathname = usePathname();
-  const sections = settingsSections({ agenda, atribucion, messenger });
+  const sections = settingsSections({ agenda, atribucion, instagram, messenger });
   return (
     <nav
       aria-label="Ajustes"

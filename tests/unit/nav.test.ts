@@ -95,6 +95,11 @@ describe("ajustes en tres secciones", () => {
   });
 
   it("cada bandera añade su enlace en su sección y en ninguna otra", () => {
+    expect(links(settingsSections({ instagram: true }))).toEqual({
+      Canales: ["WhatsApp", "Instagram"],
+      Agente: ["IA"],
+      Negocio: ["Marca", "Plantillas", "Equipo"],
+    });
     expect(links(settingsSections({ messenger: true }))).toEqual({
       Canales: ["WhatsApp", "Messenger"],
       Agente: ["IA"],
@@ -113,13 +118,19 @@ describe("ajustes en tres secciones", () => {
   });
 
   it("con todo encendido, cada pantalla de Ajustes tiene exactamente un enlace", () => {
-    const all = settingsSections({ agenda: true, atribucion: true, messenger: true })
+    const all = settingsSections({
+      agenda: true,
+      atribucion: true,
+      instagram: true,
+      messenger: true,
+    })
       .flatMap((s) => s.links)
       .map((l) => l.href);
     expect(new Set(all).size).toBe(all.length);
     expect(all.sort()).toEqual(
       [
         "/settings/whatsapp",
+        "/settings/instagram",
         "/settings/messenger",
         "/settings/ai",
         "/settings/calendar",
@@ -132,7 +143,12 @@ describe("ajustes en tres secciones", () => {
   });
 
   it("el Laboratorio no está en Ajustes: sigue en el menú principal", () => {
-    const hrefs = settingsSections({ agenda: true, atribucion: true, messenger: true })
+    const hrefs = settingsSections({
+      agenda: true,
+      atribucion: true,
+      instagram: true,
+      messenger: true,
+    })
       .flatMap((s) => s.links)
       .map((l) => l.href);
     expect(hrefs).not.toContain("/lab");
