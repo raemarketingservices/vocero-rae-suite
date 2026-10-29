@@ -576,7 +576,9 @@ export const instagramCredentials = pgTable(
   (t) => [
     uniqueIndex("instagram_credentials_org_uq").on(t.organizationId),
     uniqueIndex("instagram_credentials_ig_user_uq").on(t.igUserId),
-    index("instagram_credentials_account_ref_idx").on(t.accountRef),
+    // 024 — Mismo seguro que en WhatsApp: el webhook de Zernio enruta por
+    // account_ref, así que una cuenta no puede ser de dos tiendas.
+    uniqueIndex("instagram_credentials_account_ref_uq").on(t.accountRef),
   ]
 );
 
@@ -620,7 +622,9 @@ export const messengerCredentials = pgTable(
   (t) => [
     uniqueIndex("messenger_credentials_org_uq").on(t.organizationId),
     uniqueIndex("messenger_credentials_page_uq").on(t.pageId),
-    index("messenger_credentials_account_ref_idx").on(t.accountRef),
+    // 024 — Mismo seguro que en WhatsApp: el webhook de Zernio enruta por
+    // account_ref, así que una cuenta no puede ser de dos tiendas.
+    uniqueIndex("messenger_credentials_account_ref_uq").on(t.accountRef),
   ]
 );
 

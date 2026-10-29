@@ -2,6 +2,7 @@ import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { graphRequest, MetaApiError } from "@/lib/meta/client";
 import {
+  getMessengerCredentialsByAccountRef,
   getMessengerCredentialsByOrg,
   saveMessengerCredentials,
   tokenLast4,
@@ -62,12 +63,26 @@ export const PUT = withAuth(async (session, req: Request) => {
       "En modo Meta hace falta el ID de la página"
     );
   }
-  if (data.source === "zernio" && !data.accountRef) {
-    return apiError(
-      422,
-      "invalid_body",
-      "En modo Zernio hace falta el accountId de la cuenta conectada"
-    );
+  /**
+   * 024 — El mismo seguro que en WhatsApp e Instagram: con una API key
+   * compartida, dos tiendas no pueden quedarse con la misma cuenta de Zernio.
+   */
+  if (data.source === "zernio") {
+    if (!data.accountRef) {
+      return apiError(
+        422,
+        "invalid_body",
+        "En modo Zernio hace falta el accountId de la cuenta conectada"
+      );
+    }
+    const dueña = await getMessengerCredentialsByAccountRef(data.accountRef);
+    if (dueña && dueña.organizationId !== session.organizationId) {
+      return apiError(
+        409,
+        "cuenta_ya_conectada",
+        "Esa cuenta de Zernio ya está conectada a otra tienda. Desconéctala allí antes de traerla aquí."
+      );
+    }
   }
 
   const check = await verify(data);

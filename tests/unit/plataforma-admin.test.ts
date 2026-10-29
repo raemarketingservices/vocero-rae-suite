@@ -112,12 +112,12 @@ describe("la cookie de gestión no es una llave", () => {
     expect(fuente).not.toContain("process.env.ALLOW_SIGNUP");
   });
 
-  it("el admin cae en el panel antes de pasar por la guía de inicio", () => {
+  it("el admin no es desviado al panel al entrar: el panel es un enlace del menú", () => {
     const fuente = readFileSync(path.join(RAIZ, "src", "app", "page.tsx"), "utf8");
-    expect(fuente).toContain("session.adminDePlataforma");
-    expect(fuente.indexOf('redirect("/panel")')).toBeLessThan(
-      fuente.indexOf("guideFirst(session)")
-    );
+    expect(fuente).not.toContain('redirect("/panel")');
+    // Y sigue siendo el servidor quien decide quién ve el grupo «Plataforma».
+    const nav = readFileSync(path.join(RAIZ, "src", "lib", "nav.ts"), "utf8");
+    expect(nav).toContain("/panel");
   });
 });
 

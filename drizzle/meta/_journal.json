@@ -134,6 +134,13 @@
       "when": 1793238269999,
       "tag": "0018_cuenta_zernio_unica",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793241878511,
+      "tag": "0019_cuenta_zernio_unica_instagram_messenger",
+      "breakpoints": true
     }
   ]
 }

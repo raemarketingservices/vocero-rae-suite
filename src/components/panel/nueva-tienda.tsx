@@ -18,9 +18,9 @@ import { BotonGestion } from "@/components/panel/boton-gestion";
 type Creada = { organizationId: string; nombre: string; email: string; password: string };
 
 /**
- * Alta de una tienda con el registro público cerrado.
+ * Alta manual de una tienda, con la contraseña inicial en la mano.
  *
- * La contraseña inicial se enseña UNA vez: es el dato que se le manda al
+ * La contraseña se enseña UNA vez: es el dato que se le manda al
  * cliente, y el CRM no la guarda en ningún lado legible (el hash lo genera
  * Better Auth). Si se pierde, se cambia desde el panel de Equipo de esa tienda
  * o se le manda a recuperar por correo.
@@ -67,8 +67,9 @@ export function NuevaTienda() {
       <CardHeader>
         <CardTitle>Nueva tienda</CardTitle>
         <CardDescription>
-          Crea el espacio de un cliente: organización, usuario propietario y pipeline. Con el
-          registro público cerrado, esta es la única puerta de entrada de una tienda nueva.
+          Alta manual: crea el espacio del cliente —organización, usuario propietario y pipeline—
+          y te da la contraseña inicial para entregarle el acceso. Cuando el registro público está
+          abierto, el cliente también puede crearse su tienda solo desde <code>/register</code>.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import {
+  getInstagramCredentialsByAccountRef,
   getInstagramCredentialsByOrg,
   saveInstagramCredentials,
   tokenLast4,
@@ -48,12 +49,30 @@ export const PUT = withAuth(async (session, req: Request) => {
   if (!body.ok) return body.response;
   const data = body.data;
 
-  if (data.source === "zernio" && !data.accountRef) {
-    return apiError(
-      422,
-      "invalid_body",
-      "En modo Zernio hace falta el accountId de la cuenta conectada"
-    );
+  /**
+   * 024 — Un número, una tienda (también aquí). Es el mismo seguro que la 0018
+   * puso en WhatsApp: el `accountRef` lo escribe el navegador y con una API key
+   * compartida dos organizaciones pueden reclamar la misma cuenta de Zernio, y
+   * entonces el inbound se reparte de forma indeterminada. Se comprueba antes de
+   * llamar a la plataforma: si el id ya es de otra tienda no hay nada que
+   * verificar.
+   */
+  if (data.source === "zernio") {
+    if (!data.accountRef) {
+      return apiError(
+        422,
+        "invalid_body",
+        "En modo Zernio hace falta el accountId de la cuenta conectada"
+      );
+    }
+    const dueña = await getInstagramCredentialsByAccountRef(data.accountRef);
+    if (dueña && dueña.organizationId !== session.organizationId) {
+      return apiError(
+        409,
+        "cuenta_ya_conectada",
+        "Esa cuenta de Zernio ya está conectada a otra tienda. Desconéctala allí antes de traerla aquí."
+      );
+    }
   }
 
   const check = await verify(data);

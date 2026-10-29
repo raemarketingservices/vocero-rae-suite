@@ -93,12 +93,17 @@ describe("la raíz", () => {
     await expect(Home()).rejects.toThrow("redirect:/inbox");
   });
 
-  it("el admin de la plataforma va al panel, sin pasar por la guía", async () => {
-    // Su cuenta es dueña de una tienda, pero esa tienda no es SUYA: mandarlo a
-    // la Bandeja era hacerle creer que el panel no existe.
+  it("el admin de la plataforma entra a su propia tienda, como cualquiera", async () => {
+    // El panel no es la pantalla de entrada: es un grupo más del menú. Mandarlo
+    // allí hacía que el CRM se viera solo desde las tiendas de los clientes y
+    // dejaba muerto el enlace «Mi tienda» de la cabecera del panel.
     getSessionOrNull.mockResolvedValue({ ...owner, adminDePlataforma: true });
-    await expect(Home()).rejects.toThrow("redirect:/panel");
-    expect(guideFirst).not.toHaveBeenCalled();
+    guideFirst.mockResolvedValue(true);
+    await expect(Home()).rejects.toThrow("redirect:/onboarding");
+    expect(guideFirst).toHaveBeenCalledWith({
+      ...owner,
+      adminDePlataforma: true,
+    });
   });
 
   it("en modo gestión vuelve a la Bandeja de la tienda que eligió", async () => {

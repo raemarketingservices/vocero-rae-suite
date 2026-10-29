@@ -9,10 +9,11 @@ export const dynamic = "force-dynamic";
  * guía de inicio o el agente siga apagado, a `/onboarding`; con todo listo,
  * a la Bandeja como siempre. Sin sesión, `/inbox` manda al login.
  *
- * El admin de la plataforma es la excepción: no tiene tienda propia que
- * atender, así que su pantalla es el panel. Entrar y verse dentro del bot de
- * un cliente —con la marca y la bandeja de ese cliente— es justo lo que hace
- * creer que el panel no existe.
+ * El admin de la plataforma entra a su propia tienda, como cualquiera. Antes
+ * caía en `/panel`, pero eso convertía el CRM en algo que solo ven los
+ * clientes y dejaba muerto el enlace «Mi tienda» de la cabecera del panel. El
+ * panel sigue a un clic: es un grupo más del menú lateral (`nav.ts`), y lo ve
+ * quien está en `PLATFORM_ADMIN_EMAILS`.
  */
 export default async function Home() {
   const session = await getSessionOrNull();
@@ -20,7 +21,6 @@ export default async function Home() {
   // En modo gestión sí va a la Bandeja: ahí es donde se configura la tienda
   // que eligió, y la franja de arriba le recuerda de cuál se trata.
   if (session.gestion) redirect("/inbox");
-  if (session.adminDePlataforma) redirect("/panel");
   if (await guideFirst(session)) redirect("/onboarding");
   redirect("/inbox");
 }
