@@ -17,21 +17,68 @@ export type ZernioSentMessage = {
   at: string;
 };
 
+export type ZernioMockProfile = {
+  _id: string;
+  name: string;
+  externalId: string | null;
+};
+
+export type ZernioMockHandoff = {
+  id: string;
+  profileId: string;
+  status: "waiting" | "opened" | "connected" | "failed" | "expired";
+  /** Como en la API real: vacía salvo en `connected`. */
+  accounts: { id: string; profileId: string; username: string }[];
+  error: { code: string; message: string | null; details: Record<string, string> } | null;
+  expiresAt: string;
+};
+
+export type ZernioMockWebhook = {
+  id: string;
+  name: string;
+  url: string;
+  events: string[];
+  secret: string;
+  isActive: boolean;
+};
+
 type ZernioMockState = {
   seq: number;
   sent: ZernioSentMessage[];
+  profiles: ZernioMockProfile[];
+  handoffs: ZernioMockHandoff[];
+  webhooks: ZernioMockWebhook[];
+  /**
+   * El connect responde `account` en vez de `handoff` cuando reactiva una cuenta
+   * desconectada. El arnés no puede desconectar de verdad, así que lo fuerza.
+   */
+  connectDevuelveCuenta: { id: string; username: string } | null;
 };
 
 const g = globalThis as unknown as { __voceroZernioMock?: ZernioMockState };
 
 export function zernioMockState(): ZernioMockState {
-  if (!g.__voceroZernioMock) g.__voceroZernioMock = { seq: 0, sent: [] };
+  if (!g.__voceroZernioMock) {
+    g.__voceroZernioMock = {
+      seq: 0,
+      sent: [],
+      profiles: [],
+      handoffs: [],
+      webhooks: [],
+      connectDevuelveCuenta: null,
+    };
+  }
   return g.__voceroZernioMock;
 }
 
-/** Vacía lo enviado. El contador NO se reinicia: ver `nextZernioMessageId`. */
+/** Vacía lo enviado y los escaneos: cada corrida empieza sin estado. */
 export function resetZernioMock(): void {
-  zernioMockState().sent = [];
+  const state = zernioMockState();
+  state.sent = [];
+  state.profiles = [];
+  state.handoffs = [];
+  state.webhooks = [];
+  state.connectDevuelveCuenta = null;
 }
 
 /**
@@ -45,6 +92,43 @@ export function resetZernioMock(): void {
 export function nextZernioMessageId(): string {
   const state = zernioMockState();
   return `zmock_${Date.now().toString(36)}_${++state.seq}`;
+}
+
+/** Un id nuevo, con la misma regla: único entre corridas del arnés. */
+export function nextZernioMockId(prefijo: string): string {
+  const state = zernioMockState();
+  return `${prefijo}_${Date.now().toString(36)}_${++state.seq}`;
+}
+
+/**
+ * Cierra un escaneo desde el arnés: es el sustituto del dedo que escanea.
+ *
+ * Sin esto el flujo de handoff no se puede probar de ninguna manera, porque el
+ * resultado lo produce un teléfono.
+ */
+export function resolverZernioHandoff(
+  handoffId: string,
+  outcome:
+    | { status: "connected"; accountId: string; username: string }
+    | { status: "failed"; code: string; message?: string | null; details?: Record<string, string> }
+    | { status: "expired" | "opened" | "waiting" }
+): ZernioMockHandoff | null {
+  const h = zernioMockState().handoffs.find((x) => x.id === handoffId);
+  if (!h) return null;
+  h.status = outcome.status;
+  h.accounts =
+    outcome.status === "connected"
+      ? [{ id: outcome.accountId, profileId: h.profileId, username: outcome.username }]
+      : [];
+  h.error =
+    outcome.status === "failed"
+      ? {
+          code: outcome.code,
+          message: outcome.message ?? null,
+          details: outcome.details ?? {},
+        }
+      : null;
+  return h;
 }
 
 /**

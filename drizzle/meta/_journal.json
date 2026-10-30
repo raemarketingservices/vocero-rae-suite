@@ -141,6 +141,13 @@
       "when": 1793241878511,
       "tag": "0019_cuenta_zernio_unica_instagram_messenger",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793336617207,
+      "tag": "0020_handoff_zernio",
+      "breakpoints": true
     }
   ]
 }

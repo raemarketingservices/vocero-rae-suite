@@ -69,6 +69,7 @@ Banderas de despliegue (apagadas por defecto; su código viaja siempre en `main`
 | `AGENDA=on` | Motor de citas: pantalla Citas, Ajustes → Agenda, `/api/bookings`, `/api/calendar/*`, `/api/bot/availability` y `/api/bot/bookings`, instrucciones de agendar en el prompt del agente (`src/server/agenda/flag.ts`) |
 | `CHANNELS=whatsapp,instagram,messenger` | Canales extra: webhooks `/api/webhooks/ig` y `/api/webhooks/messenger`, Ajustes → Messenger, credenciales por canal, distintivo en la bandeja (`src/server/channels/enabled.ts`) |
 | `ATRIBUCION=on` | Guardado del `ctwa_clid`, reporte a la Conversions API de Meta, Ajustes → Anuncios y `/api/settings/capi` (`src/server/attribution/flag.ts`). El anuncio de origen se ve siempre, con o sin bandera |
+| `ZERNIO_MASTER_API_KEY` | Conectar WhatsApp escaneando un QR sin cuenta de Zernio: `/api/settings/whatsapp/zernio/handoff`, un perfil por tienda y el alta automática del webhook. Sin ella la tarjeta solo ofrece pegar la llave propia |
 
 Apagada, cada superficie responde 404 (no 403). El despliegue en producción está en el README («Instalación»: Rutas A y B, y «Otras plataformas» con `render.yaml`, `fly.toml` y `railway.toml`) y en `INSTALL-IA.md`; no se repite aquí.
 
@@ -97,7 +98,7 @@ Apagada, cada superficie responde 404 (no 403). El despliegue en producción est
 | `onboarding/` | Guía de inicio: qué falta para que el agente conteste (perfil, IA, WhatsApp y, con `AGENDA`, agenda), los pasos que ve el dueño y si la guía es la primera pantalla (`guideFirst`) | `status.ts`, `guide.ts`, `calendar-verifiers.ts` |
 | `seed/` | Negocio demo idempotente «Ferretería El Martillo» | `demo.ts` |
 | `whatsapp/` | Credenciales cifradas, prueba de conexión y suscripción del webhook, media, plantillas | `credentials.ts`, `connect.ts`, `media.ts`, `templates.ts` |
-| `zernio/` | Transporte y firma de la API unificada de Zernio; reparte cada evento al canal que toca | `index.ts`, `dispatch.ts` |
+| `zernio/` | Transporte y firma de la API unificada de Zernio; reparte cada evento al canal que toca. `connect.ts` conecta un número escaneando un QR con la llave maestra de RAE: un perfil por tienda, el handoff sondeado y el webhook dado de alta | `index.ts`, `dispatch.ts`, `connect.ts` |
 
 Sueltos: `contacts.ts` (serialización), `contact-source.ts` (fuente del prospecto), `branding.ts` (marca guardada en la organización), `health.ts` (lo que responde `/api/health`: BD, versión, banderas activas, `mediaWritable`), `media-dir.ts` (sondeo de escritura de `MEDIA_DIR`, cacheado 60 s; lo comparten el arranque y el health).
 

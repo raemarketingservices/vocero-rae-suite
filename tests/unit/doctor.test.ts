@@ -231,6 +231,7 @@ describe("checkWhatsApp", () => {
     organizationId: "org_1",
     source: "meta",
     accountRef: null,
+    profileRef: null,
     webhookSecret: null,
     wabaId: "waba1",
     phoneNumberId: "pn1",

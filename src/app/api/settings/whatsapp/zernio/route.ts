@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
-import { MetaApiError } from "@/lib/meta/client";
+import { getEnv } from "@/lib/env";
+import { errorDeZernio } from "@/server/zernio/connect";
 import {
   desconectarCanal,
   getCredentialsByAccountRef,
@@ -41,10 +42,13 @@ function pintaConexion(creds: {
 
 export const GET = withAuth(async (session) => {
   const creds = await getCredentialsByOrg(session.organizationId);
-  if (!creds || !hablaPorZernio(creds)) {
-    return Response.json({ connection: null });
-  }
-  return Response.json({ connection: pintaConexion(creds) });
+  return Response.json({
+    connection: creds && hablaPorZernio(creds) ? pintaConexion(creds) : null,
+    // 025: si la instancia ofrece el escaneo de QR con la llave de RAE. Lo
+    // decide el entorno, no la tienda, y la tarjeta lo pregunta porque es lo
+    // único que le permite mostrar o no ese modo — no puede adivinarlo.
+    modoRae: Boolean(getEnv().ZERNIO_MASTER_API_KEY?.trim()),
+  });
 });
 
 const putSchema = z.object({
@@ -231,26 +235,3 @@ function elegirCuenta(
   return { ok: true, cuenta: cuentas[0]! };
 }
 
-/** Traduce el fallo de Zernio al código que entiende la tarjeta. */
-function errorDeZernio(err: unknown): Response {
-  if (err instanceof MetaApiError) {
-    if (err.isAuthError || err.status === 402) {
-      return apiError(
-        422,
-        "invalid_token",
-        err.status === 402
-          ? "Zernio rechaza la cuenta: está pausada o sin método de pago"
-          : "La API key de Zernio no es válida"
-      );
-    }
-    if (err.status === 0 || err.status >= 500) {
-      return apiError(
-        503,
-        "zernio_unavailable",
-        "Zernio no respondió; intenta de nuevo en un momento"
-      );
-    }
-    return apiError(422, "invalid_token", err.message);
-  }
-  return apiError(500, "internal", "No se pudo verificar la conexión");
-}

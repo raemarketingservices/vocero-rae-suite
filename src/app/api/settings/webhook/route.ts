@@ -46,14 +46,15 @@ export const POST = withAuth(async (session) => {
       "Primero guarda la conexión de WhatsApp."
     );
   }
-  // 023: el webhook de un número conectado por Zernio se da de alta en el
-  // panel de Zernio, no en Meta. Registrarlo aquí suscribiría el número a la
-  // app de otra tienda.
+  // 023: el webhook de un número conectado por Zernio no se registra en Meta.
+  // Registrarlo aquí suscribiría el número a la app de otra tienda. Desde 025
+  // lo da de alta el propio CRM al conectar el número (`asegurarWebhook`), así
+  // que este botón no tiene nada que hacer en ese canal.
   if (hablaPorZernio(creds)) {
     return apiError(
       409,
       "canal_zernio",
-      "Este número habla por Zernio: el webhook se configura en Zernio, no en Meta"
+      "Este número habla por Zernio: su webhook se alta al conectar el número y se administra en Zernio, no en Meta"
     );
   }
   if (!creds.wabaId || !creds.phoneNumberId) {

@@ -513,6 +513,12 @@ export const metaCredentials = pgTable(
     phoneNumberId: text("phone_number_id"),
     /** Zernio: `account.id` de la cuenta conectada. Meta directo: null. */
     accountRef: text("account_ref"),
+    /**
+     * Zernio: el perfil donde vive ese número. Con la llave maestra de RAE una
+     * sola cuenta de Zernio puede tener los números de cien tiendas, y sin el
+     * perfil no se puede reconectar el de esta ni saber de quién es.
+     */
+    profileRef: text("profile_ref"),
     /** Secreto HMAC de las entregas de Zernio; null en modo Meta. */
     webhookSecret: text("webhook_secret"),
     displayPhoneNumber: text("display_phone_number"),
@@ -539,6 +545,43 @@ export const metaCredentials = pgTable(
     // que llega del navegador. Los nulos de las filas de Meta no chocan.
     uniqueIndex("meta_credentials_account_ref_uq").on(t.accountRef),
   ]
+);
+
+/**
+ * 025 — Un escaneo en curso.
+ *
+ * Zernio es quien guarda el estado del handoff; lo que guarda esta fila es a
+ * QUÉ TIENDA pertenece ese handoff. Sin esa atadura, sondear el resultado de
+ * otro escaneo sería una transferencia de número: el id es un UUID y no se
+ * adivina, pero una fuga por logs o por un enlace pegado en un chat de soporte
+ * sí es posible, y el dueño del resultado tiene que ser quien lo pidió.
+ *
+ * Es transitorio y no se limpia: `expires_at` dice cuándo dejó de servir, y una
+ * fila vieja no cambia el comportamiento de nada.
+ */
+export const zernioHandoff = pgTable(
+  "zernio_handoff",
+  {
+    /** El `handoff.id` de Zernio (UUID), no un id propio. */
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    profileId: text("profile_id").notNull(),
+    /** Los mismos valores que responde Zernio: aquí no hay traducción. */
+    status: text("status", {
+      enum: ["waiting", "opened", "connected", "failed", "expired"],
+    })
+      .notNull()
+      .default("waiting"),
+    accountRef: text("account_ref"),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("zernio_handoff_org_idx").on(t.organizationId)]
 );
 
 /**

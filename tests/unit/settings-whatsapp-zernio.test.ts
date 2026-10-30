@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * 023 — La ruta de alta de WhatsApp por Zernio.
@@ -53,6 +53,17 @@ import { DELETE, GET, PUT } from "@/app/api/settings/whatsapp/zernio/route";
 const ACCOUNT = "665f1c2e8b3a4d0012345678";
 const SANDBOX = "6a180a034c7f364ffded3c9c";
 const KEY = "zrk_abcdef123456";
+
+beforeAll(() => {
+  // El GET de esta ruta también lee el entorno (dice si la instancia ofrece el
+  // modo RAE), así que estas pruebas necesitan un entorno válido como el resto.
+  process.env.APP_BASE_URL = "https://crm.ejemplo.test";
+  process.env.DATABASE_URL = "postgresql://t:t@localhost:5432/t";
+  process.env.BETTER_AUTH_SECRET = "secret-de-test-suficiente";
+  process.env.ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
+  process.env.META_WEBHOOK_VERIFY_TOKEN = "verify-test-1234";
+  delete process.env.ZERNIO_MASTER_API_KEY;
+});
 
 /** Una cuenta de WhatsApp como las devuelve `listZernioAccounts`. */
 function cuenta(id: string, name: string, phoneNumber: string | null) {
@@ -273,7 +284,7 @@ describe("lo que se muestra y lo que se suelta", () => {
       status: "connected",
       displayPhoneNumber: "+1 849 627 9994",
     };
-    expect(await (await GET()).json()).toEqual({ connection: null });
+    expect(await (await GET()).json()).toEqual({ connection: null, modoRae: false });
   });
 
   it("DELETE suelta una conexión de Zernio sin tocar Meta", async () => {

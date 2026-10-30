@@ -393,11 +393,15 @@ export async function listZernioAccounts(
  * Traduce los fallos de Zernio al MetaApiError que el resto del CRM ya sabe
  * interpretar — incluido `isAuthError`, que distingue una llave muerta de un
  * hipo transitorio y costó un incidente aprender.
+ *
+ * Va exportado porque el alta de un número (`connect.ts`) habla con los mismos
+ * endpoints y necesita la misma traducción: un segundo `fetch` propio sería un
+ * segundo sitio donde perder el `isAuthError`.
  */
-async function zernioFetch(
+export async function zernioFetch(
   path: string,
   opts: {
-    method?: "GET" | "POST";
+    method?: "GET" | "POST" | "PUT" | "DELETE";
     token: string;
     body?: unknown;
     /** Cuerpo multipart: la propia fetch le pone el boundary. */

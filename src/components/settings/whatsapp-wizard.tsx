@@ -96,8 +96,8 @@ export function WhatsappWizard() {
                 : "El token de WhatsApp expiró o fue revocado."}
             </p>
             <p className="text-danger-text opacity-80">
-              Los envíos están pausados. Pega un token nuevo abajo y prueba la
-              conexión para reconectar.
+              Los envíos están pausados. Reconecta el número abajo: escaneando
+              el QR o pegando un token nuevo, según cómo lo conectaste.
             </p>
           </div>
           <Desconectar
@@ -181,7 +181,7 @@ export function WhatsappWizard() {
               : null
           }
           webhookUrl={webhook?.url ?? null}
-          onSaved={() => void refetch()}
+          onSaved={refetch}
         />
       ) : (
         <>

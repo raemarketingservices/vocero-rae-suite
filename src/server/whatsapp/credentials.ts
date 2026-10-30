@@ -13,6 +13,12 @@ export type Credentials = {
   phoneNumberId: string | null;
   /** Zernio: `account.id` de la cuenta conectada. Meta directo: null. */
   accountRef: string | null;
+  /**
+   * Zernio: el perfil donde vive ese número. Con la llave maestra de RAE una
+   * sola cuenta puede tener cientos, y reconectar el número de esta tienda sin
+   * saber su perfil sería recorrerlos todos.
+   */
+  profileRef: string | null;
   /** Secreto HMAC de las entregas de Zernio; null en modo Meta. */
   webhookSecret: string | null;
   displayPhoneNumber: string | null;
@@ -31,6 +37,7 @@ function toCredentials(row: Row): Credentials {
     wabaId: row.wabaId,
     phoneNumberId: row.phoneNumberId,
     accountRef: row.accountRef,
+    profileRef: row.profileRef,
     webhookSecret: row.webhookSecret,
     displayPhoneNumber: row.displayPhoneNumber,
     verifiedName: row.verifiedName,
@@ -112,6 +119,7 @@ export async function saveCredentials(input: {
   wabaId?: string | null;
   phoneNumberId?: string | null;
   accountRef?: string | null;
+  profileRef?: string | null;
   webhookSecret?: string | null;
   token: string;
   displayPhoneNumber?: string | null;
@@ -125,6 +133,7 @@ export async function saveCredentials(input: {
     wabaId: input.wabaId ?? null,
     phoneNumberId: input.phoneNumberId ?? null,
     accountRef: input.accountRef ?? null,
+    profileRef: input.profileRef ?? null,
     webhookSecret: input.webhookSecret ?? null,
     displayPhoneNumber: input.displayPhoneNumber ?? null,
     verifiedName: input.verifiedName ?? null,

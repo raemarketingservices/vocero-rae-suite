@@ -61,6 +61,13 @@ export const envSchema = z.object({
   PLATFORM_ADMIN_EMAILS: z.string().optional(),
   AGENT_COALESCE_MS: z.coerce.number().int().min(0).default(6000),
   WA_MOCK_ENABLED: z.string().optional(),
+  // 023 — La llave maestra de RAE, para que una tienda conecte su número
+  // escaneando un QR sin tener cuenta de Zernio ni saber qué es una API key.
+  // Es opcional: sin ella el modo «conectar con RAE» no existe y la tarjeta
+  // solo ofrece pegar la llave propia (respuesta 404, como AGENDA/CHANNELS).
+  // Jamás sale del servidor: se cifra por organización al conectar y el
+  // navegador solo ve la cola.
+  ZERNIO_MASTER_API_KEY: z.string().optional(),
   // API key de un cerebro externo que conduzca la conversación por /api/bot/*.
   // Sin ella, toda esa superficie responde 401.
   BOT_API_KEY: z.string().optional(),
