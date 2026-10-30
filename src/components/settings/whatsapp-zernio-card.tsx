@@ -329,21 +329,38 @@ function EscaneoQr({
           el camino que falla.
         </li>
         <li>
-          En la pantalla que se abre, inicia sesión en{" "}
-          <span className="text-foreground">Facebook</span> con la cuenta dueña
-          del número y elige conectar la app de WhatsApp Business que ya tienes.
-          Con el WhatsApp normal no va. Nada se transfiere ni se porta: el número
-          sigue siendo tuyo y la app sigue funcionando igual.
+          En la ventana de Facebook, inicia sesión con{" "}
+          <span className="text-foreground">
+            la cuenta a la que está vinculada la app de WhatsApp Business de ese
+            teléfono
+          </span>
+          , no con la primera que aparezca: si te equivocas de login Meta responde
+          que no tienes permisos para ver ese número. Escribe el número y confirma
+          los datos del negocio.
           <span className="text-text-3">
             {" "}
-            Si el tuyo no sale en la lista de números, no es un error: esa lista
-            solo trae los que ya están en una cuenta de WhatsApp Business. Elige{" "}
+            Si el tuyo no sale en la lista, no es un error: esa lista solo trae
+            los que ya están en una cuenta de WhatsApp Business de este login.
+            Elige{" "}
             <span className="text-foreground">
               «Ingresar un nuevo número de teléfono»
             </span>
-            , escribe el tuyo con su código de país —viene puesto US +1— y
-            confirma con el SMS que llega a ese teléfono.
+            , escribe el tuyo con su código de país —viene puesto US +1— y sigue
+            lo que Meta pida.
           </span>
+        </li>
+        <li>
+          Después Meta enseña{" "}
+          <span className="text-foreground">un QR dentro de su ventana</span>. Ése
+          se escanea{" "}
+          <span className="text-foreground">
+            desde dentro de la app de WhatsApp Business
+          </span>
+          : la cámara del icono arriba a la derecha, o Ajustes → Dispositivos
+          vinculados. Es al revés que el QR de más abajo, que es un enlace web y
+          va con la cámara del teléfono. Con el WhatsApp normal no va: la app
+          tiene que ser la de Business. Nada se transfiere ni se porta: el número
+          sigue siendo tuyo y la app sigue funcionando igual.
         </li>
         <li>
           Vuelve aquí: la conexión sola aparece en esta pantalla.
@@ -411,6 +428,33 @@ function EscaneoQr({
                 <Loader2 className="h-3 w-3 animate-spin" /> Comprobando…
               </p>
             )}
+            <details className="text-xs text-text-3">
+              <summary className="cursor-pointer">
+                ¿Meta te dio un error en su ventana?
+              </summary>
+              <p className="mt-1.5">
+                Zernio solo entera de lo que le llega al final: si Meta te
+                rechaza dentro de su ventana, aquí el enlace sigue esperando sin
+                avisar. Estos son los rechazos que dan la tarjeta y qué hacer:
+              </p>
+              <ul className="mt-1.5 list-disc space-y-1 pl-4">
+                <li>
+                  «No tienes los permisos para ver este recurso» — el login de
+                  Facebook no es el dueño del registro de WhatsApp Business de
+                  ese número. Ábrelo con la cuenta a la que está vinculada la app
+                  del teléfono.
+                </li>
+                <li>
+                  «Este número ya está registrado en una cuenta de WhatsApp» —
+                  está en el WhatsApp normal o en otra cuenta empresarial: hay
+                  que liberarlo antes, o conectar otro número.
+                </li>
+                <li>
+                  La ventana se cerró sin aprobar — pide un enlace nuevo y acepta
+                  los permisos de Facebook.
+                </li>
+              </ul>
+            </details>
           </div>
         </div>
       )}
@@ -424,9 +468,11 @@ function EscaneoQr({
             <QRCodeSVG value={escaneo.url} size={196} />
           </div>
           <p className="mt-2 max-w-md">
-            Con la cámara del teléfono, nunca desde Ajustes → Dispositivos
-            vinculados: ese lector solo entiende códigos de vinculación y
-            rechaza este enlace.
+            Este QR es el enlace de conexión, no el de emparejamiento: ábrelo con
+            la cámara del teléfono, nunca desde Ajustes → Dispositivos vinculados,
+            porque ese lector solo entiende códigos de vinculación y rechaza un
+            enlace web. El QR que Meta enseña dentro de su ventana es otro
+            asunto: ése sí se escanea desde la app de WhatsApp Business.
           </p>
         </details>
       )}

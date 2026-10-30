@@ -561,6 +561,30 @@ describe("el GET que sondea el escaneo", () => {
     expect(dbf.updates).toEqual([expect.objectContaining({ status: "failed", errorCode: "whatsapp_coexistence_not_registered" })]);
   });
 
+  it("el rechazo de Facebook dentro de la ventana de Meta se traduce, no se devuelve crudo", async () => {
+    fila();
+    zk.plan["GET /connect/handoffs/" + HANDOFF] = {
+      status: "failed",
+      accounts: [],
+      error: {
+        code: "oauth_denied",
+        message:
+          "The authorization was cancelled or declined in the platform dialog. Connect again and approve the requested permissions.",
+        details: {
+          is_user_fixable: "true",
+          platform_error: "access_denied",
+          platform_error_reason: "user_denied",
+          platform_error_description: "Permissions error",
+          stage: "authorize",
+        },
+      },
+    };
+    const body = await (await get(HANDOFF)).json();
+    expect(body.estado).toBe("failed");
+    expect(body.mensaje).toContain("cuenta del teléfono");
+    expect(body.mensaje).not.toMatch(/cancelled or declined/);
+  });
+
   it("un fallo que nadie arregla desde el teléfono se muestra crudo", async () => {
     fila();
     zk.plan["GET /connect/handoffs/" + HANDOFF] = {

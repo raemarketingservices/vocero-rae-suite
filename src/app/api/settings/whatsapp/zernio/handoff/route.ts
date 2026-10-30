@@ -329,9 +329,13 @@ function mensajeDelEscaneo(
   expirado: boolean
 ): string {
   if (expirado) {
-    return "El enlace caducó: dura 30 minutos. Pide uno nuevo y escanéalo.";
+    return "El enlace caducó: dura 30 minutos. Pide uno nuevo y ábrelo.";
   }
   switch (codigo) {
+    case "oauth_denied":
+      // Meta rechaza el número dentro de su ventana y el handoff ni se entera:
+      // el login puesto no es el dueño del registro de WhatsApp Business.
+      return "Facebook no aprobó el permiso: suele ser que iniciaste sesión con una cuenta que no es la dueña de ese número en la app de WhatsApp Business. Vuelve a abrir el enlace con la cuenta del teléfono y acepta los permisos.";
     case "whatsapp_coexistence_not_registered":
       return "El número no aparece en la app de WhatsApp Business de ese teléfono. Con WhatsApp normal no se puede conectar: abre la app de Business e inténtalo otra vez.";
     case "one_whatsapp_per_profile":
@@ -343,9 +347,9 @@ function mensajeDelEscaneo(
     case "payment_required":
       return "La cuenta de Zernio está pausada por el pago; se reanuda al pagarlo.";
     case "connection_cancelled":
-      return "Se cerró la pantalla antes de terminar. Vuelve a escanear.";
+      return "Se cerró la pantalla antes de terminar. Vuelve a abrir el enlace.";
     case "session_expired":
-      return "El escaneo tardó demasiado. Pide un enlace nuevo.";
+      return "Tardó demasiado en abrirse el enlace. Pide uno nuevo.";
     case "account_mismatch":
       return "Se inició con un login de Facebook distinto del que se pidió para esta tienda.";
     case "connect_unverified":
