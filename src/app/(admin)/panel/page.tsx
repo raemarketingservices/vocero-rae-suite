@@ -3,8 +3,10 @@ import {
   listarTiendas,
   type ResumenTienda,
 } from "@/server/platform/resumen";
+import { inventarioUnikoActivo } from "@/server/uniko/config";
 import { BotonGestion } from "@/components/panel/boton-gestion";
 import { NuevaTienda } from "@/components/panel/nueva-tienda";
+import { VinculoUniko } from "@/components/panel/vinculo-uniko";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -86,7 +88,7 @@ function Metrica({
   );
 }
 
-function TiendaCard({ t }: { t: ResumenTienda }) {
+function TiendaCard({ t, conCatalogo }: { t: ResumenTienda; conCatalogo: boolean }) {
   const dueños = t.dueños.map((d) => d.nombre || d.email).join(", ");
   return (
     <article className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
@@ -168,12 +170,19 @@ function TiendaCard({ t }: { t: ResumenTienda }) {
           valor={t.ia ? `${t.ia.proveedor}/${t.ia.modelo}` : null}
         />
       </div>
+
+      {conCatalogo && (
+        <VinculoUniko organizationId={t.organizationId} storeId={t.unikoStoreId} />
+      )}
     </article>
   );
 }
 
 export default async function PanelTiendasPage() {
   const tiendas = await listarTiendas();
+  // Sin URL ni llave anon en el despliegue, la superficie de catálogo no
+  // existe: ni la tarjeta se pinta (la ruta también responde 404).
+  const conCatalogo = inventarioUnikoActivo();
   const conCanal = tiendas.filter(
     (t) =>
       t.whatsapp?.estado === "connected" ||
@@ -213,7 +222,7 @@ export default async function PanelTiendasPage() {
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {tiendas.map((t) => (
-            <TiendaCard key={t.organizationId} t={t} />
+            <TiendaCard key={t.organizationId} t={t} conCatalogo={conCatalogo} />
           ))}
         </div>
       )}

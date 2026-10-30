@@ -82,6 +82,14 @@ export const organization = pgTable("organization", {
   logo: text("logo"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   metadata: text("metadata"),
+  /**
+   * Fila de `stores` en el Supabase de UNIKO-RD de esta tienda. Es el puente
+   * entre el CRM y el catálogo: con él el agente puede preguntar existencias
+   * vivas (RPC `crm_search_products`) en vez de fiarse del bloque que el
+   * kb-sync escribió hace hasta 15 minutos. Sin valor, la superficie de
+   * inventario no existe para esta organización.
+   */
+  unikoStoreId: text("uniko_store_id"),
 });
 
 export const member = pgTable("member", {

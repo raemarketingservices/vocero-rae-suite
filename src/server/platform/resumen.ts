@@ -27,6 +27,8 @@ export type ResumenTienda = {
   messenger: { pagina: string | null; estado: string } | null;
   ia: { proveedor: string; modelo: string; estado: string; ultimo4: string } | null;
   agente: { activo: boolean; nombre: string } | null;
+  /** Tienda de UNIKO-RD vinculada; null si el bot de este espacio no tiene catálogo. */
+  unikoStoreId: string | null;
 };
 
 export async function listarTiendas(): Promise<ResumenTienda[]> {
@@ -161,6 +163,7 @@ export async function listarTiendas(): Promise<ResumenTienda[]> {
     agente: ag.has(o.id)
       ? { activo: ag.get(o.id)!.activo, nombre: ag.get(o.id)!.nombre }
       : null,
+    unikoStoreId: o.unikoStoreId,
   }));
 }
 
