@@ -296,6 +296,35 @@ describe("el POST que pide el enlace", () => {
     });
   });
 
+  it("la cuenta atrás sale de su propio reloj, no del navegador", async () => {
+    flujoBase();
+    const body = await (await post()).json();
+    expect(body.quedanSegundos).toBeGreaterThan(1700);
+    expect(body.quedanSegundos).toBeLessThanOrEqual(1800);
+  });
+
+  it("un enlace ya nacido caducado se responde en cero, no con cuenta negativa", async () => {
+    flujoBase();
+    zk.plan["GET /connect/whatsapp"] = {
+      handoff: {
+        id: HANDOFF,
+        url: "https://zernio.test/h/" + HANDOFF,
+        expiresAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+    };
+    const body = await (await post()).json();
+    expect(body.quedanSegundos).toBe(0);
+  });
+
+  it("si Zernio no dice cuándo caduca, no se inventa una cuenta atrás", async () => {
+    flujoBase();
+    zk.plan["GET /connect/whatsapp"] = {
+      handoff: { id: HANDOFF, url: "https://zernio.test/h/" + HANDOFF },
+    };
+    const body = await (await post()).json();
+    expect(body.quedanSegundos).toBeNull();
+  });
+
   it("la llave maestra no baja al navegador", async () => {
     flujoBase();
     const texto = await (await post()).text();

@@ -42,6 +42,14 @@ function llaveMaestra(): string | null {
   return k ? k : null;
 }
 
+/** Cuánto le queda al enlace, según el reloj de aquí (el del navegador no cuenta). */
+function segundosRestantes(expiresAt: string | null): number | null {
+  if (!expiresAt) return null;
+  const fin = Date.parse(expiresAt);
+  if (Number.isNaN(fin)) return null;
+  return Math.max(0, Math.round((fin - Date.now()) / 1000));
+}
+
 /** Un escaneo por tienda, uno en curso: los enlaces caducan a los 30 minutos. */
 export const POST = withAuth(async (session, req: Request) => {
   if (session.role !== "owner") {
@@ -127,6 +135,10 @@ export const POST = withAuth(async (session, req: Request) => {
       handoffId: inicio.handoffId,
       url: inicio.url,
       expiresAt: inicio.expiresAt,
+      // La cuenta atrás viaja como duración, no como instante. El reloj del
+      // navegador no es de fiar — una máquina adelantada horas leería caducado
+      // un enlace vivo y cortaría un escaneo que iba bien — y aquí pasó.
+      quedanSegundos: segundosRestantes(inicio.expiresAt),
     });
   } catch (err) {
     return errorDeZernio(err);

@@ -151,8 +151,9 @@ export function WhatsappZernioCard({
  *
  * Se sondea cada tres segundos (lo que recomienda Zernio) y el sondeo se corta
  * en cuanto el estado es terminal: seguir preguntando por un handoff ya
- * consumido es escribir en la fila de nuevo. El reloj local también corta —
- * cuando la venta dice que caducó, no hace falta esperar a que Zernio lo confirme.
+ * consumido es escribir en la fila de nuevo. La cuenta atrás también corta, pero
+ * con la duración que midió el servidor: el reloj de quien conecta puede estar
+ * adelantado horas, y fiarse de él es declararle caduco a un enlace vivo.
  */
 function EscaneoQr({
   reconectar,
@@ -164,7 +165,10 @@ function EscaneoQr({
   const [escaneo, setEscaneo] = useState<{
     handoffId: string;
     url: string;
-    expiresAt: string | null;
+    /** Segundos que le quedaban al recibir la respuesta, según el servidor. */
+    duracion: number | null;
+    /** Cuándo se recibió, en el reloj de este navegador. */
+    recibido: number;
   } | null>(null);
   const [estado, setEstado] = useState<EstadoEscaneo>("inactivo");
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -188,7 +192,7 @@ function EscaneoQr({
       estado?: string;
       handoffId?: string;
       url?: string;
-      expiresAt?: string | null;
+      quedanSegundos?: number | null;
       error?: { message?: string };
     } | null;
     setArrancando(false);
@@ -211,7 +215,8 @@ function EscaneoQr({
     setEscaneo({
       handoffId: data.handoffId,
       url: data.url,
-      expiresAt: data.expiresAt ?? null,
+      duracion: data.quedanSegundos ?? null,
+      recibido: Date.now(),
     });
     setEstado("qr");
   }, [reconectar, onConectado]);
@@ -261,23 +266,31 @@ function EscaneoQr({
     };
   }, [escaneo, estado, onConectado]);
 
+  /**
+   * La cuenta atrás, restada del reloj de este navegador dos veces.
+   *
+   * `duracion` llega ya medida por el servidor, así que el desfase entre los dos
+   * relojes se cancela en la resta: una máquina adelantada horas veía caducar en
+   * segundos un enlace que aún servía 29 minutos, y cortaba un escaneo que iba
+   * bien. Sin `duracion` no se adivina nada: manda el sondeo.
+   */
   useEffect(() => {
-    if (!escaneo?.expiresAt) {
+    if (!escaneo?.duracion) {
       setQuedan(null);
       return;
     }
-    const fin = Date.parse(escaneo.expiresAt);
-    if (Number.isNaN(fin)) {
-      setQuedan(null);
-      return;
-    }
-    const marca = () => setQuedan(Math.max(0, Math.round((fin - Date.now()) / 1000)));
+    const { duracion, recibido } = escaneo;
+    const marca = () =>
+      setQuedan(
+        Math.max(0, duracion - Math.round((Date.now() - recibido) / 1000))
+      );
     marca();
     const id = setInterval(marca, 1000);
     return () => clearInterval(id);
   }, [escaneo]);
 
-  // El reloj se adelanta a Zernio: si aquí dice 0, ya no hay nada que sondear.
+  // El enlace caduca a los 30 minutos y el servidor dijo cuántos le quedaban al
+  // nacer: si aquí llega a 0, ya no hay nada que sondear.
   useEffect(() => {
     if (quedan === 0 && (estado === "qr" || estado === "waiting" || estado === "opened")) {
       setEstado("expired");
@@ -300,16 +313,23 @@ function EscaneoQr({
     <div className="space-y-4">
       <ol className="list-decimal space-y-1 pl-5 text-xs text-text-2">
         <li>
-          Abre <span className="text-foreground">WhatsApp Business</span> en el
-          teléfono del número que quieres conectar. Con el WhatsApp normal no
-          va: el número tiene estar en la app de Business.
+          Escanea este código con la{" "}
+          <span className="text-foreground">cámara del teléfono</span>, no desde
+          dentro de WhatsApp: es un enlace web y el lector de{" "}
+          <span className="text-foreground">Dispositivos vinculados</span> solo
+          entiende códigos de vinculación, por eso rechaza este.
         </li>
         <li>
-          Ajustes → <span className="text-foreground">Dispositivos vinculados</span>{" "}
-          → escanear este código. Nada se transfiere ni se porta: el número
+          En el teléfono se abre la pantalla de RAE: acepta e inicia sesión en{" "}
+          <span className="text-foreground">Facebook</span> con la cuenta dueña
+          del número, y elige conectar la app de WhatsApp Business que ya tienes.
+          Con el WhatsApp normal no va. Nada se transfiere ni se porta: el número
           sigue siendo tuyo y la app sigue funcionando igual.
         </li>
-        <li>Vuelve aquí: la conexión sola aparece en esta pantalla.</li>
+        <li>
+          Cuando el teléfono diga que terminó, vuelve aquí: la conexión sola
+          aparece en esta pantalla.
+        </li>
       </ol>
 
       {escaneo && (
@@ -320,8 +340,8 @@ function EscaneoQr({
           <div className="min-w-[12rem] flex-1 space-y-1 text-sm">
             <p className="font-medium">
               {estado === "opened"
-                ? "Abierto en el teléfono: acepta ahí para terminar."
-                : "Escanea con la cámara de WhatsApp Business."}
+                ? "Abierto en el teléfono: termina ahí los pasos de Meta."
+                : "Escanea con la cámara del teléfono."}
             </p>
             {quedan !== null && (
               <p className="text-xs text-text-3">
