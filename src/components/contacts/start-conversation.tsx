@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Send } from "lucide-react";
 import type { TemplateDto } from "@/lib/types";
+import { conHint } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -62,12 +63,17 @@ export function StartConversation({
     }).catch(() => null);
     setEnviando(false);
     const data = (await res?.json().catch(() => null)) as
-      | { error?: { message?: string }; conversationId?: string }
+      | { error?: { message?: string; hint?: string }; conversationId?: string }
       | null;
     if (!res?.ok) {
       // El fallo de Meta se explica aquí mismo (plantilla en pausa, número
       // que no la recibe…) en vez de perderse.
-      setError(data?.error?.message ?? "No se pudo iniciar la conversación");
+      setError(
+        conHint(
+          data?.error?.message ?? "No se pudo iniciar la conversación",
+          data?.error?.hint
+        )
+      );
       return;
     }
     onStarted(data?.conversationId ?? "");

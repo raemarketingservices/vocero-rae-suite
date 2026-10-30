@@ -96,7 +96,7 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
     return Response.json({ messageId: result.messageId });
   } catch (err) {
     if (err instanceof SendError) {
-      return apiError(SEND_ERROR_STATUS[err.code], err.code, err.message);
+      return apiError(SEND_ERROR_STATUS[err.code], err.code, err.message, err.hint);
     }
     throw err;
   }

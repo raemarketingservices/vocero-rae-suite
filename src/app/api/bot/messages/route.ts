@@ -72,7 +72,7 @@ export async function POST(req: Request) {
       if (err.code === "sandbox_violation") {
         return apiError(409, "sandbox_violation", err.message);
       }
-      return apiError(502, err.code, err.message);
+      return apiError(502, err.code, err.message, err.hint);
     }
     throw err;
   }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, PanelRight } from "lucide-react";
-import { cn, formatPhone } from "@/lib/utils";
+import { cn, conHint, formatPhone } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import type { ConversationDto, MessageDto } from "@/lib/types";
 import { CHANNEL_LABEL, type Channel } from "@/lib/channels";
@@ -237,10 +237,13 @@ export function InboxClient({ channels }: { channels: readonly Channel[] }) {
         }
         if (!res.ok) {
           const data = (await res.json().catch(() => null)) as {
-            error?: { message?: string };
+            error?: { message?: string; hint?: string };
           } | null;
           drop();
-          return data?.error?.message ?? "No se pudo enviar el mensaje";
+          return conHint(
+            data?.error?.message ?? "No se pudo enviar el mensaje",
+            data?.error?.hint
+          );
         }
         // Primero traer el mensaje real, después quitar el provisional: al
         // revés, la burbuja parpadearía.

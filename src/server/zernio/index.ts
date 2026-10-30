@@ -453,3 +453,26 @@ export async function zernioFetch(
   }
   return json;
 }
+
+/**
+ * El código de texto con el que Zernio nombra su fallo (`TEMPLATE_REQUIRED`,
+ * `REENGAGEMENT_MESSAGE`…), si lo trajo.
+ *
+ * No cabe en `MetaApiError.code`, que es el número de la Graph API: por eso se
+ * lee de los detalles, donde `zernioFetch` guarda el cuerpo tal cual llegó. Lo
+ * usa la pista en español del envío (`server/channels/hints.ts`), que sin este
+ * código no puede distinguir una ventana cerrada de un 400 cualquiera.
+ */
+export function codigoDeFalloZernio(err: MetaApiError): string | null {
+  const cuerpo = err.details as
+    | { code?: unknown; error?: { code?: unknown } | string }
+    | null;
+  if (!cuerpo || typeof cuerpo === "string") return null;
+  const crudo =
+    typeof cuerpo.code === "string"
+      ? cuerpo.code
+      : typeof cuerpo.error === "object" && cuerpo.error !== null
+        ? cuerpo.error.code
+        : null;
+  return typeof crudo === "string" && crudo.trim() ? crudo.trim() : null;
+}

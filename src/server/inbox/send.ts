@@ -1,8 +1,10 @@
 import { eq } from "drizzle-orm";
+import type { Channel } from "@/lib/channels";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { graphRequest, MetaApiError, normalizeRecipient } from "@/lib/meta/client";
 import { destinatarioMeta, type Destinatario } from "@/lib/meta/destinatario";
+import { codigoDeEnvioMeta, describeSendError } from "@/lib/meta/send-errors";
 import { publish } from "@/server/events/bus";
 import {
   getCredentialsByOrg,
@@ -11,6 +13,7 @@ import {
   type Credentials,
 } from "@/server/whatsapp/credentials";
 import {
+  codigoDeFalloZernio,
   sendZernioAttachment,
   sendZernioMessage,
   sendZernioStructured,
@@ -35,6 +38,7 @@ import {
   textFits,
   windowClosedMessage,
 } from "@/server/channels/capabilities";
+import { hintParaFalloDeEnvio } from "@/server/channels/hints";
 import { isChannelEnabled } from "@/server/channels/enabled";
 import { serializeMessage } from "@/server/inbox/ingest";
 import {
@@ -55,11 +59,18 @@ export class SendError extends Error {
     | "upload_failed";
   /** 008: presente cuando el fallo ocurrió TRAS persistir el mensaje (failed). */
   messageId?: string;
+  /**
+   * Qué hacer con el fallo, en español. `message` suele ser el del proveedor, en
+   * inglés y con sus códigos; la pista es lo que la bandeja puede enseñarle al
+   * operador. Ausente cuando no hay nada útil que decir.
+   */
+  hint?: string;
 
-  constructor(code: SendError["code"], message: string) {
+  constructor(code: SendError["code"], message: string, hint?: string) {
     super(message);
     this.name = "SendError";
     this.code = code;
+    if (hint) this.hint = hint;
   }
 }
 
@@ -599,7 +610,7 @@ async function callZernioWhatsappSend(
     });
     return res.platformMessageId;
   } catch (err) {
-    throw await zernioSendError(err, creds.organizationId);
+    throw await zernioSendError(err, creds.organizationId, "whatsapp");
   }
 }
 
@@ -624,7 +635,7 @@ async function callZernioWhatsappMedia(
     });
     return res.platformMessageId;
   } catch (err) {
-    throw await zernioSendError(err, creds.organizationId);
+    throw await zernioSendError(err, creds.organizationId, "whatsapp");
   }
 }
 
@@ -643,7 +654,7 @@ async function callZernioStructured(
     });
     return res.platformMessageId;
   } catch (err) {
-    throw await zernioSendError(err, creds.organizationId);
+    throw await zernioSendError(err, creds.organizationId, "whatsapp");
   }
 }
 
@@ -654,7 +665,8 @@ async function callZernioStructured(
  */
 async function zernioSendError(
   err: unknown,
-  organizationId: string
+  organizationId: string,
+  channel: Channel
 ): Promise<SendError> {
   if (err instanceof MetaApiError) {
     if (err.isAuthError) {
@@ -667,7 +679,15 @@ async function zernioSendError(
     if (err.status === 0 || err.status >= 500) {
       return new SendError("meta_unavailable", "Zernio no está disponible ahora");
     }
-    return new SendError("meta_error", err.message);
+    return new SendError(
+      "meta_error",
+      err.message,
+      hintParaFalloDeEnvio({
+        channel,
+        status: err.status,
+        code: codigoDeFalloZernio(err),
+      })
+    );
   }
   return err as SendError;
 }
@@ -705,7 +725,14 @@ export async function callGraphSend(
       if (err.status === 0 || err.status >= 500) {
         throw new SendError("meta_unavailable", "Meta no está disponible ahora");
       }
-      throw new SendError("meta_error", err.message);
+      const codigo = codigoDeEnvioMeta(err);
+      throw new SendError(
+        "meta_error",
+        // La tabla curada ya tiene el código en español; sin código conocido
+        // devuelve el texto de Meta tal cual.
+        describeSendError(codigo, err.message),
+        hintParaFalloDeEnvio({ channel: "whatsapp", status: err.status, code: codigo })
+      );
     }
     throw err;
   }
@@ -759,7 +786,11 @@ async function callInstagramSend(
           "Instagram no está disponible en este momento; intenta de nuevo"
         );
       }
-      throw new SendError("meta_error", err.message);
+      throw new SendError(
+        "meta_error",
+        err.message,
+        hintParaFalloDeEnvio({ channel: "instagram", status: err.status, code: err.code })
+      );
     }
     throw err;
   }
@@ -813,7 +844,11 @@ async function callMessengerSend(
           "Messenger no está disponible en este momento; intenta de nuevo"
         );
       }
-      throw new SendError("meta_error", err.message);
+      throw new SendError(
+        "meta_error",
+        err.message,
+        hintParaFalloDeEnvio({ channel: "messenger", status: err.status, code: err.code })
+      );
     }
     throw err;
   }

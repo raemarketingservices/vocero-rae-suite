@@ -5,13 +5,23 @@ import {
 } from "@/lib/auth/platform";
 import { requireSession, UnauthorizedError, type SessionContext } from "@/lib/auth/session";
 
-/** Respuesta de error estándar de la API interna (contrato api.md). */
+/**
+ * Respuesta de error estándar de la API interna (contrato api.md).
+ *
+ * `hint` es opcional y solo lo ponen los fallos que tienen algo que sugerirle al
+ * operador: el `message` suele ser el del proveedor, en su idioma, y la pista es
+ * la acción en español. Ausente, la clave no aparece en el cuerpo.
+ */
 export function apiError(
   status: number,
   code: string,
-  message: string
+  message: string,
+  hint?: string
 ): Response {
-  return Response.json({ error: { code, message } }, { status });
+  return Response.json(
+    { error: { code, message, ...(hint ? { hint } : {}) } },
+    { status }
+  );
 }
 
 /**

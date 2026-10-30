@@ -7,6 +7,7 @@ import { countVariables } from "@/lib/templates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { conHint } from "@/lib/utils";
 
 /**
  * Selector de plantilla aprobada para conversaciones con ventana cerrada
@@ -85,9 +86,14 @@ export function TemplateSender({
     setSending(false);
     if (!res.ok) {
       const data = (await res.json().catch(() => null)) as {
-        error?: { message?: string };
+        error?: { message?: string; hint?: string };
       } | null;
-      setError(data?.error?.message ?? "No se pudo enviar la plantilla");
+      setError(
+        conHint(
+          data?.error?.message ?? "No se pudo enviar la plantilla",
+          data?.error?.hint
+        )
+      );
       return;
     }
     setSelectedId("");

@@ -40,3 +40,12 @@ export function formatPhone(phone: string | null | undefined): string {
   // 003: contactos BSUID pueden no tener teléfono.
   return phone ? `+${phone}` : "Sin teléfono";
 }
+
+/**
+ * El fallo y su pista juntos. El `message` lo escribe el proveedor y dice qué
+ * pasó en su idioma; la `hint` la pone la API cuando hay algo que el operador
+ * pueda hacer al respecto. Sin pista se muestra el mensaje a secas.
+ */
+export function conHint(message: string, hint?: string | null): string {
+  return hint ? `${message} — ${hint}` : message;
+}

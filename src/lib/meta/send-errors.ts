@@ -8,6 +8,8 @@
  * documentación de Meta.
  */
 
+import type { MetaApiError } from "@/lib/meta/client";
+
 const DESCRIPTIONS: Record<number, string> = {
   130472:
     "Meta tiene el número del destinatario en un experimento y le está bloqueando los mensajes de MARKETING. No es un fallo de tu configuración: prueba con una plantilla de categoría UTILITY o con otro número.",
@@ -56,4 +58,24 @@ export function describeSendError(
   // mensaje de error vacío es tan inútil como el triángulo mudo.
   const base = known || detail?.trim() || "Meta rechazó el envío";
   return code != null ? `${base} (Meta ${code})` : base;
+}
+
+/**
+ * El código de envío de Meta, esté donde esté.
+ *
+ * La Graph lo trae unas veces en `error.code` y otras dentro de
+ * `error.error_data.code` con un 400 genérico arriba —y ese segundo caso es
+ * justo el de la ventana de 24 h (131047), el fallo que más se repite al
+ * responder. Mirar solo `error.code` dejaría sin traducir el más común.
+ */
+export function codigoDeEnvioMeta(err: MetaApiError): number | null {
+  if (typeof err.code === "number" && err.code in DESCRIPTIONS) return err.code;
+  const cuerpo = err.details as
+    | { error?: { error_data?: { code?: unknown }; code?: unknown } }
+    | null;
+  const candidatos = [cuerpo?.error?.error_data?.code, cuerpo?.error?.code];
+  for (const c of candidatos) {
+    if (typeof c === "number" && c in DESCRIPTIONS) return c;
+  }
+  return typeof err.code === "number" ? err.code : null;
 }
