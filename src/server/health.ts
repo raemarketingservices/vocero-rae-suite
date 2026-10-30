@@ -5,6 +5,7 @@ import { APP_VERSION, resolveCommit } from "@/lib/version";
 import { parseAgendaFlag } from "@/server/agenda/flag";
 import { parseAtribucionFlag } from "@/server/attribution/flag";
 import { parseChannels } from "@/server/channels/enabled";
+import { leerConfigUniko } from "@/server/uniko/config";
 import { mediaDirStatus } from "@/server/media-dir";
 
 /**
@@ -43,6 +44,12 @@ export type HealthFeatures = {
   channels: Channel[];
   /** Atribución de anuncios y CAPI (016): bandera `ATRIBUCION`. */
   atribucion: boolean;
+  /**
+   * Catálogo y existencias de UNIKO-RD en vivo: `UNIKO_SUPABASE_URL` +
+   * `UNIKO_SUPABASE_ANON_KEY`. Es lo que confirma, sin abrir el CRM, que las
+   * dos variables llegaron al contenedor.
+   */
+  uniko: boolean;
 };
 
 export type HealthOk = {
@@ -86,6 +93,7 @@ export function healthFeatures(env: FlagEnv = process.env): HealthFeatures {
     agenda: parseAgendaFlag(env.AGENDA),
     channels: CHANNEL_ORDER.filter((c) => channels.has(c)),
     atribucion: parseAtribucionFlag(env.ATRIBUCION),
+    uniko: leerConfigUniko(env).active,
   };
 }
 

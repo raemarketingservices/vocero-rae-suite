@@ -68,6 +68,15 @@ export const envSchema = z.object({
   // Jamás sale del servidor: se cifra por organización al conectar y el
   // navegador solo ve la cola.
   ZERNIO_MASTER_API_KEY: z.string().optional(),
+  // UNIKO-RD: catálogo y existencias de la tienda, leídos en vivo por el
+  // agente (RPC `crm_search_products`). Las dos tienen que estar para que la
+  // superficie exista; con cualquiera falta, el turno no pregunta a nadie.
+  // La llave es la ANON pública del proyecto (la misma del navegador): lo que
+  // protege la disponibilidad son las RLS de Supabase, no un secreto del CRM.
+  // Sin `.url()` a propósito, por lo de BRAIN_HEALTH_URL: mal escrita deja la
+  // superficie inactiva, no tumba el CRM.
+  UNIKO_SUPABASE_URL: z.string().optional(),
+  UNIKO_SUPABASE_ANON_KEY: z.string().optional(),
   // API key de un cerebro externo que conduzca la conversación por /api/bot/*.
   // Sin ella, toda esa superficie responde 401.
   BOT_API_KEY: z.string().optional(),

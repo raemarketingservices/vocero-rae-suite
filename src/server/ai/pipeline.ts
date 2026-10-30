@@ -20,6 +20,7 @@ import { buildAgentSystemPrompt } from "@/server/ai/prompts";
 import { agendaEnabled } from "@/server/agenda/flag";
 import { bookSlot, offerSlots } from "@/server/agenda/agent";
 import { getOffers, mapaDeHuecosParaModelo } from "@/server/agenda/offers";
+import { bloqueDeExistenciasParaTurno } from "@/server/uniko/turno";
 
 /**
  * Turno del agente (FR-021..FR-025).
@@ -186,6 +187,17 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   const ofertas = agenda ? await getOffers(organizationId, conversationId) : [];
   const mapaDeHuecos = mapaDeHuecosParaModelo(ofertas);
 
+  /**
+   * Existencias vivas del catálogo de la tienda. El bloque del knowledge base
+   * es una foto de hasta 15 minutos; lo que se vende en ese intervalo hace que
+   * el bot prometa stock que ya no está. Apagado (sin `UNIKO_SUPABASE_*` o sin
+   * tienda vinculada), esta línea cuesta cero.
+   */
+  const existencias = await bloqueDeExistenciasParaTurno(
+    organizationId,
+    lastInbound.text
+  );
+
   const messages: ChatMessage[] = [
     {
       role: "system",
@@ -203,6 +215,9 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
      */
     ...(mapaDeHuecos
       ? [{ role: "system" as const, content: mapaDeHuecos }]
+      : []),
+    ...(existencias
+      ? [{ role: "system" as const, content: existencias }]
       : []),
   ];
 

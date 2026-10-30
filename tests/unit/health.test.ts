@@ -45,11 +45,12 @@ afterEach(async () => {
 });
 
 describe("features: las banderas de despliegue", () => {
-  it("sin banderas: solo WhatsApp, agenda y atribución apagadas", () => {
+  it("sin banderas: solo WhatsApp, agenda, atribución y uniko apagadas", () => {
     expect(healthFeatures({})).toEqual({
       agenda: false,
       channels: ["whatsapp"],
       atribucion: false,
+      uniko: false,
     });
   });
 
@@ -65,6 +66,7 @@ describe("features: las banderas de despliegue", () => {
       agenda: true,
       channels: ["whatsapp", "instagram", "messenger"],
       atribucion: true,
+      uniko: false,
     });
   });
 
@@ -73,7 +75,25 @@ describe("features: las banderas de despliegue", () => {
     // `true` y la agenda respondiera 404, el health mentiría.
     expect(
       healthFeatures({ AGENDA: "onn", CHANNELS: "telegram", ATRIBUCION: "off" })
-    ).toEqual({ agenda: false, channels: ["whatsapp"], atribucion: false });
+    ).toEqual({ agenda: false, channels: ["whatsapp"], atribucion: false, uniko: false });
+  });
+
+  it("el catálogo de UNIKO solo se enciende con URL y llave, y una URL mal escrita no", () => {
+    expect(
+      healthFeatures({ UNIKO_SUPABASE_URL: "http://supabase:8001" }).uniko
+    ).toBe(false);
+    expect(
+      healthFeatures({
+        UNIKO_SUPABASE_URL: "http://supabase:8001",
+        UNIKO_SUPABASE_ANON_KEY: "anon",
+      }).uniko
+    ).toBe(true);
+    expect(
+      healthFeatures({
+        UNIKO_SUPABASE_URL: "no-es-una-url",
+        UNIKO_SUPABASE_ANON_KEY: "anon",
+      }).uniko
+    ).toBe(false);
   });
 });
 
