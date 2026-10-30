@@ -334,6 +334,16 @@ function EscaneoQr({
           del número y elige conectar la app de WhatsApp Business que ya tienes.
           Con el WhatsApp normal no va. Nada se transfiere ni se porta: el número
           sigue siendo tuyo y la app sigue funcionando igual.
+          <span className="text-text-3">
+            {" "}
+            Si el tuyo no sale en la lista de números, no es un error: esa lista
+            solo trae los que ya están en una cuenta de WhatsApp Business. Elige{" "}
+            <span className="text-foreground">
+              «Ingresar un nuevo número de teléfono»
+            </span>
+            , escribe el tuyo con su código de país —viene puesto US +1— y
+            confirma con el SMS que llega a ese teléfono.
+          </span>
         </li>
         <li>
           Vuelve aquí: la conexión sola aparece en esta pantalla.
