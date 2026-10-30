@@ -111,8 +111,22 @@ export type CuentaConectada = {
 };
 
 export type InicioHandoff =
-  /** Hay que escanear: el link caduca a los 30 minutos. */
-  | { modo: "qr"; handoffId: string; url: string; expiresAt: string | null }
+  /** Hay que escanear o abrir el link: caduca a los 30 minutos. */
+  | {
+      modo: "qr";
+      handoffId: string;
+      /** El link corto, para el teléfono. */
+      url: string;
+      /**
+       * El link largo de Zernio, el mismo al que redirige el corto. Se da de
+       * frente porque abrirlo es un clic de verdad: el escaneo depende de la
+       * cámara, del lector correcto y de que el navegador del teléfono no tape
+       * la pantalla de Meta, y cuando algo de eso falla el enlace sigue servido
+       * en la misma tarjeta.
+       */
+      authUrl: string | null;
+      expiresAt: string | null;
+    }
   /**
    * Zernio reactivó una cuenta desconectada de este perfil y devolvió la cuenta
    * en vez de un link. No hay QR que mostrar: se conecta aquí mismo.
@@ -155,13 +169,20 @@ export async function iniciarConexion(
   const res = (await zernioFetch(`${ZERNIO_PATH_CONNECT}?${q.toString()}`, {
     token,
   })) as {
+    authUrl?: string;
     handoff?: { id?: string; url?: string; expiresAt?: string };
     account?: Record<string, unknown>;
   } | null;
 
   const h = res?.handoff;
   if (h?.id && h.url) {
-    return { modo: "qr", handoffId: h.id, url: h.url, expiresAt: h.expiresAt ?? null };
+    return {
+      modo: "qr",
+      handoffId: h.id,
+      url: h.url,
+      authUrl: res?.authUrl?.trim() ? res.authUrl : null,
+      expiresAt: h.expiresAt ?? null,
+    };
   }
   const cuenta = parseCuenta(res?.account);
   if (cuenta) return { modo: "connected", cuenta };

@@ -288,6 +288,9 @@ describe("el POST que pide el enlace", () => {
     const body = await res.json();
     expect(body).toMatchObject({ estado: "qr", handoffId: HANDOFF });
     expect(body.url).toContain("zernio.test");
+    // El enlace largo es el que se abre con un clic; sin él la tarjeta no tiene
+    // a dónde llevar a nadie.
+    expect(body.authUrl).toBe("https://zernio.test/oauth");
     expect(dbf.inserts[0]).toMatchObject({
       id: HANDOFF,
       organizationId: "org_a",

@@ -5,12 +5,13 @@ import { QRCodeSVG } from "qrcode.react";
 import {
   CheckCircle2,
   Copy,
+  ExternalLink,
   Info,
   Loader2,
   RefreshCw,
   Smartphone,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -25,9 +26,13 @@ import { cn } from "@/lib/utils";
 /**
  * 023/025 — WhatsApp por Zernio, en dos formas de conectar el mismo número.
  *
- * - **Escaneando un QR** (modo RAE): el CRM prepara el escaneo con su llave
- *   maestra y al dueño de la tienda solo le queda abrir la cámara. No ve Zernio,
- *   no crea una cuenta y no copia una API key: es lo que se vende.
+ * - **Abriendo un enlace de Zernio** (modo RAE): el CRM prepara la conexión con
+ *   su llave maestra y al dueño de la tienda le queda abrir el enlace —en este
+ *   equipo o en el teléfono— y pasar los pasos de Meta. No ve Zernio, no crea una
+ *   cuenta y no copia una API key: es lo que se vende. El QR es el mismo enlace
+ *   para quien prefiera la cámara; se ofrece aparte porque es el camino que más
+ *   se cae (lector equivocado, navegador del teléfono tapando la ventana de
+ *   Meta) y porque abrir el enlace es un clic de la persona.
  * - **Pegando su llave** (BYO): cada tienda paga su cuenta de Zernio y trae su
  *   key. Sigue existiendo porque hay clientes que ya la tienen, y porque es la
  *   única forma de conectar sin que RAE sea dueño de la cuenta.
@@ -165,6 +170,8 @@ function EscaneoQr({
   const [escaneo, setEscaneo] = useState<{
     handoffId: string;
     url: string;
+    /** El enlace largo de Zernio; el corto redirige ahí. Puede no venir. */
+    authUrl: string | null;
     /** Segundos que le quedaban al recibir la respuesta, según el servidor. */
     duracion: number | null;
     /** Cuándo se recibió, en el reloj de este navegador. */
@@ -192,6 +199,7 @@ function EscaneoQr({
       estado?: string;
       handoffId?: string;
       url?: string;
+      authUrl?: string | null;
       quedanSegundos?: number | null;
       error?: { message?: string };
     } | null;
@@ -215,6 +223,7 @@ function EscaneoQr({
     setEscaneo({
       handoffId: data.handoffId,
       url: data.url,
+      authUrl: data.authUrl ?? null,
       duracion: data.quedanSegundos ?? null,
       recibido: Date.now(),
     });
@@ -313,35 +322,64 @@ function EscaneoQr({
     <div className="space-y-4">
       <ol className="list-decimal space-y-1 pl-5 text-xs text-text-2">
         <li>
-          Escanea este código con la{" "}
-          <span className="text-foreground">cámara del teléfono</span>, no desde
-          dentro de WhatsApp: es un enlace web y el lector de{" "}
-          <span className="text-foreground">Dispositivos vinculados</span> solo
-          entiende códigos de vinculación, por eso rechaza este.
+          Pide el enlace y{" "}
+          <span className="text-foreground">ábrelo</span>: en este equipo con el
+          botón, o en el teléfono copiándolo y pegándolo en su navegador. El QR
+          hace lo mismo, pero depende de la cámara y del lector correcto, y ese es
+          el camino que falla.
         </li>
         <li>
-          En el teléfono se abre la pantalla de RAE: acepta e inicia sesión en{" "}
+          En la pantalla que se abre, inicia sesión en{" "}
           <span className="text-foreground">Facebook</span> con la cuenta dueña
-          del número, y elige conectar la app de WhatsApp Business que ya tienes.
+          del número y elige conectar la app de WhatsApp Business que ya tienes.
           Con el WhatsApp normal no va. Nada se transfiere ni se porta: el número
           sigue siendo tuyo y la app sigue funcionando igual.
         </li>
         <li>
-          Cuando el teléfono diga que terminó, vuelve aquí: la conexión sola
-          aparece en esta pantalla.
+          Vuelve aquí: la conexión sola aparece en esta pantalla.
         </li>
       </ol>
 
       {escaneo && (
-        <div className="flex flex-wrap items-center gap-4 rounded-md border bg-background p-4">
-          <div className="rounded-md bg-white p-2">
-            <QRCodeSVG value={escaneo.url} size={196} />
+        <div className="space-y-3 rounded-md border bg-background p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={escaneo.authUrl ?? escaneo.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(buttonVariants())}
+            >
+              <ExternalLink className="mr-1.5 h-4 w-4" />
+              Abrir el enlace de Zernio
+            </a>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard.writeText(escaneo.url).then(() => {
+                  setCopiado(true);
+                  setTimeout(() => setCopiado(false), 1500);
+                });
+              }}
+            >
+              {copiado ? (
+                <CheckCircle2 className="mr-1.5 h-4 w-4" />
+              ) : (
+                <Copy className="mr-1.5 h-4 w-4" />
+              )}
+              {copiado ? "Copiado" : "Copiar el enlace"}
+            </Button>
           </div>
-          <div className="min-w-[12rem] flex-1 space-y-1 text-sm">
+
+          <p className="break-all font-mono text-[11px] text-text-3">
+            {escaneo.url}
+          </p>
+
+          <div className="min-w-0 space-y-1 text-sm">
             <p className="font-medium">
               {estado === "opened"
-                ? "Abierto en el teléfono: termina ahí los pasos de Meta."
-                : "Escanea con la cámara del teléfono."}
+                ? "Zernio ya lo vio abierto: termina ahí los pasos de Meta."
+                : "Esperando a que se abra el enlace…"}
             </p>
             {quedan !== null && (
               <p className="text-xs text-text-3">
@@ -370,30 +408,16 @@ function EscaneoQr({
       {escaneo && (
         <details className="text-xs text-text-3">
           <summary className="cursor-pointer">
-            ¿Estás en el teléfono y no puedes escanear tu propia pantalla?
+            ¿Mejor escanearlo con la cámara del teléfono?
           </summary>
-          <div className="mt-2 flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-md border bg-background px-2 py-1">
-              {escaneo.url}
-            </code>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Copiar el enlace de escaneo"
-              onClick={() => {
-                void navigator.clipboard.writeText(escaneo.url).then(() => {
-                  setCopiado(true);
-                  setTimeout(() => setCopiado(false), 1500);
-                });
-              }}
-            >
-              {copiado ? (
-                <CheckCircle2 className="h-4 w-4" />
-              ) : (
-                <Copy className="h-4 w-4" />
-              )}
-            </Button>
+          <div className="mt-2 inline-block rounded-md bg-white p-2">
+            <QRCodeSVG value={escaneo.url} size={196} />
           </div>
+          <p className="mt-2 max-w-md">
+            Con la cámara del teléfono, nunca desde Ajustes → Dispositivos
+            vinculados: ese lector solo entiende códigos de vinculación y
+            rechaza este enlace.
+          </p>
         </details>
       )}
 

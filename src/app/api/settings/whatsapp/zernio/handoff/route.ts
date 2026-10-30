@@ -134,6 +134,9 @@ export const POST = withAuth(async (session, req: Request) => {
       estado: "qr",
       handoffId: inicio.handoffId,
       url: inicio.url,
+      // El enlace largo de Zernio: abrirlo desde aquí es un clic de la persona,
+      // y eso es lo que el escaneo no puede garantizar.
+      authUrl: inicio.authUrl,
       expiresAt: inicio.expiresAt,
       // La cuenta atrás viaja como duración, no como instante. El reloj del
       // navegador no es de fiar — una máquina adelantada horas leería caducado
