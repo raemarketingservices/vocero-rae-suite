@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, or } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { normalizeMx } from "@/lib/meta/client";
@@ -237,7 +237,10 @@ async function ingestarMensajeHistorico(
     .where(
       and(
         eq(schema.conversation.id, conversation.id),
-        sql`(${schema.conversation.lastMessageAt} is null or ${schema.conversation.lastMessageAt} < ${waTimestamp})`
+        or(
+          isNull(schema.conversation.lastMessageAt),
+          lt(schema.conversation.lastMessageAt, waTimestamp)
+        )
       )
     );
 

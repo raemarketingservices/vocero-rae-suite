@@ -271,6 +271,36 @@ describe("solicitarSincronizacion — POST /{PHONE}/smb_app_data", () => {
     expect(!res.ok && res.message).toContain("24 horas");
   });
 
+  /**
+   * El caso de la tienda que se autorregistra: su número entró a la Cloud API
+   * a secas, no en coexistence, y Meta lo dice con 131000/subcode 10 o con
+   * 133010. La copia NO puede culpar al token —ahí es donde el dueño perdería
+   * el tiempo— porque el relleno simplemente no existe que pedir.
+   */
+  it("número sin coexistence (131000/10 y 133010) no culpa al token", async () => {
+    graphRequest.mockRejectedValueOnce(
+      new MetaApiError("(#131000) This API is only available to WhatsApp Business App phone numbers", {
+        status: 400,
+        code: 131000,
+        details: { error: { code: 131000, error_subcode: 10 } },
+      })
+    );
+    const sinCoexist = await solicitarSincronizacion({
+      phoneNumberId: PHONE,
+      token: TOKEN,
+      syncType: "history",
+    });
+    expect(sinCoexist).toMatchObject({ ok: false, code: "sin_coexistence" });
+    expect(!sinCoexist.ok && sinCoexist.message).not.toMatch(/token|permiso/i);
+
+    graphRequest.mockRejectedValueOnce(
+      new MetaApiError("(#133010) Account not registered", { status: 400, code: 133010 })
+    );
+    expect(
+      await solicitarSincronizacion({ phoneNumberId: PHONE, token: TOKEN, syncType: "history" })
+    ).toMatchObject({ code: "sin_coexistence" });
+  });
+
   it("token vencido, sin permiso y Meta caída tienen su propio código", async () => {
     graphRequest.mockRejectedValueOnce(new MetaApiError("Invalid token", { status: 401, code: 190 }));
     expect(await solicitarSincronizacion({ phoneNumberId: PHONE, token: TOKEN, syncType: "history" })).toMatchObject({

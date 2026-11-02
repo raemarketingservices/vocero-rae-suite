@@ -26,6 +26,13 @@ app. El CRM solo los lee y avisa; por eso el arnés siembra `subscribedFields`.
    dos pedidos y el guardado sigue siendo 200.
 5. Sembrar los cinco campos → `campos.faltan` vacío.
 
+6. El caso de la tienda que se auto-registró: su número entró a la Cloud API a
+   secas, así que `smb_app_data` responde 131000 (subcode 10) o 133010 →
+   `code: "sin_coexistence"`, y el aviso dice que no hay app del teléfono de
+   qué rellenar. NO menciona el token: mandaría al dueño a revisar el sitio
+   equivocado. Cobertura en `tests/unit/coexistence.test.ts`; el guardado sigue
+   siendo 200 y el envío funciona igual.
+
 ## `history`: relleno, no actividad
 
 6. `POST /api/dev/wa-mock/history` con un hilo de dos mensajes de hace ~60 días

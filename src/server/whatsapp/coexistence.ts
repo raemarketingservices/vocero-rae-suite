@@ -182,7 +182,13 @@ export type SolicitudSync =
   | {
       ok: false;
       syncType: SyncType;
-      code: "ya_solicitada" | "fuera_de_ventana" | "sin_permiso" | "meta_no_responde" | "error";
+      code:
+        | "sin_coexistence"
+        | "ya_solicitada"
+        | "fuera_de_ventana"
+        | "sin_permiso"
+        | "meta_no_responde"
+        | "error";
       message: string;
     };
 
@@ -226,6 +232,22 @@ export async function solicitarSincronizacion(opts: {
         code: "fuera_de_ventana",
         message:
           "Meta ya no acepta el relleno: la sincronización se pide una sola vez y dentro de las 24 horas del alta.",
+      };
+    }
+    /**
+     * El caso del alta self-serve: un número registrado a mano en la Cloud API
+     * nunca entró a coexistence, y Meta lo dice con 131000 (subcode 10) o con
+     * 133010. No es un problema del token —decir «sin permiso» mandaría al
+     * dueño a revisar el sitio equivocado—, es que no hay app de teléfono de
+     * la que rellenar: el número funciona igual y los mensajes nuevos llegan.
+     */
+    if (err.code === 131000 || err.code === 133010 || subcode === 10) {
+      return {
+        ok: false,
+        syncType,
+        code: "sin_coexistence",
+        message:
+          "Meta no tiene de qué rellenar: este número entró a la Cloud API a secas, no en coexistence desde la app de WhatsApp Business del teléfono. Los mensajes nuevos funcionan igual.",
       };
     }
     if (err.isAuthError) {
