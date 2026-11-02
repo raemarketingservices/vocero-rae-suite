@@ -6,6 +6,11 @@ import {
   type WebhookPayload,
 } from "@/server/inbox/webhook";
 import { processEchoesValue, processMessagesValue } from "@/server/inbox/ingest";
+import {
+  processAppStateSyncValue,
+  processHistoryValue,
+} from "@/server/inbox/coexistence-sync";
+import { processAccountUpdateValue } from "@/server/whatsapp/coexistence";
 import { processTemplateStatusValue } from "@/server/whatsapp/template-events";
 import {
   isValidZernioSignature,
@@ -112,6 +117,16 @@ async function processPayload(payload: WebhookPayload): Promise<void> {
       } else if (change.field === "smb_message_echoes") {
         // 008: mensajes enviados a mano desde la app del teléfono (coexistence)
         await processEchoesValue(change.value);
+      } else if (change.field === "history") {
+        // Coexistence: relleno de hasta 180 días de mensajes previos al alta.
+        // Mensajes de PASADO — no abren la ventana de 24 h ni disparan al agente.
+        await processHistoryValue(change.value);
+      } else if (change.field === "smb_app_state_sync") {
+        // Coexistence: la agenda del teléfono del dueño (altas y renombrados).
+        await processAppStateSyncValue(change.value);
+      } else if (change.field === "account_update") {
+        // El dueño desconectó (o reconectó) la cuenta desde su teléfono.
+        await processAccountUpdateValue(entry.id ?? null, change.value);
       } else if (change.field === "message_template_status_update") {
         await processTemplateStatusValue(entry.id ?? null, change.value);
       }

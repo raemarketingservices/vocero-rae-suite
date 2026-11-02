@@ -1,4 +1,8 @@
 import { graphRequest, MetaApiError } from "@/lib/meta/client";
+import {
+  revisarCoexistence,
+  type CoexistenceCheck,
+} from "@/server/whatsapp/coexistence";
 
 export type ConnectionCheck =
   | {
@@ -90,6 +94,12 @@ export type WebhookRegistration =
        * Una app sin webhook propio es la sospechosa si no llega nada.
        */
       appWithoutWebhook: boolean;
+      /**
+       * Coexistence: si el número está montado en la app de WhatsApp Business
+       * del teléfono y si la app tiene suscritos los campos que ese modo
+       * necesita. Informativo: NUNCA falla el guardado.
+       */
+      coexistencia: CoexistenceCheck;
     }
   | {
       ok: true;
@@ -124,6 +134,11 @@ export type WebhookRegistration =
  *   2. `POST /{phone}` con `webhook_configuration`: override a nivel NÚMERO.
  *      Meta verifica la URL en ese momento (handshake con el verify token).
  *   3. `GET /{phone}?fields=webhook_configuration`: confirma que quedó.
+ *
+ * Y un cuarto paso INFORMATIVO: el diagnóstico de coexistence (`is_on_biz_app`
+ * del número y los campos suscritos de la app). Es lectura pura — los campos
+ * no se pueden suscribir por API para WhatsApp — así que se reporta y ya: una
+ * cuenta sin `history` suscrito pierde el relleno, no la conexión.
  *
  * Por qué en el número y no en la WABA: el del número sobrevive a cualquier
  * `subscribed_apps` sin cuerpo y es el que Meta mira primero. Jamás lanza por
@@ -171,6 +186,7 @@ export async function registerWebhookForNumber(opts: {
     return registrationError(err, "Meta no aceptó la dirección del webhook");
   }
 
+  let appWithoutWebhook = true;
   try {
     const res = await graphRequest<WebhookConfiguration>(
       `${phoneNumberId}?fields=webhook_configuration`,
@@ -184,10 +200,15 @@ export async function registerWebhookForNumber(opts: {
           "Meta aceptó el webhook pero no lo confirma en el número. Vuelve a intentarlo en unos minutos.",
       };
     }
-    return { ok: true, appWithoutWebhook: !res.webhook_configuration.application };
+    appWithoutWebhook = !res.webhook_configuration.application;
   } catch (err) {
     return registrationError(err, "No se pudo confirmar el webhook en Meta");
   }
+
+  // Va fuera del try a propósito: el diagnóstico de coexistence es lectura
+  // informativa, y un problema ahí no puede deshacer un webhook registrado.
+  const coexistencia = await revisarCoexistence({ wabaId, phoneNumberId, token });
+  return { ok: true, appWithoutWebhook, coexistencia };
 }
 
 /**

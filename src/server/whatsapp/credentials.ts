@@ -175,6 +175,22 @@ export async function markReconnectRequired(
     .where(scoped(schema.metaCredentials.organizationId, organizationId));
 }
 
+/**
+ * Reactiva una conexión que estaba vencida (`account_update: RECONNECTED`, o un
+ * token nuevo).
+ *
+ * El dueño puede volver a conectar desde su teléfono sin pasar por el CRM: el
+ * webhook lo avisa, y sin esto la tienda quedaría con los envíos pausados y un
+ * aviso falso aunque la cuenta ya funcionara.
+ */
+export async function markConnected(organizationId: string): Promise<void> {
+  const db = getDb();
+  await db
+    .update(schema.metaCredentials)
+    .set({ status: "connected", updatedAt: new Date() })
+    .where(scoped(schema.metaCredentials.organizationId, organizationId));
+}
+
 /** Últimos 4 caracteres del token para mostrar en UI (jamás el token). */
 export function tokenLast4(token: string): string {
   return token.slice(-4);

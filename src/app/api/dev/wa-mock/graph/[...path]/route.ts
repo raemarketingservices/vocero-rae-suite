@@ -179,6 +179,11 @@ export async function GET(req: Request, ctx: Params) {
               ...(sub.overrideCallbackUri
                 ? { override_callback_uri: sub.overrideCallbackUri }
                 : {}),
+              // Meta los reporta aquí cuando se piden; el mock los reporta
+              // siempre que estén sembrados (ver wa-mock/coexistence).
+              ...(sub.subscribedFields?.length
+                ? { subscribed_fields: sub.subscribedFields }
+                : {}),
             },
           ]
         : [],
@@ -199,6 +204,21 @@ export async function GET(req: Request, ctx: Params) {
   // 017 — GET {psid}?fields=first_name,last_name → perfil de quien escribe
   // por Messenger (la ingesta lo consulta la primera vez que ve un PSID).
   const fields = new URL(req.url).searchParams.get("fields") ?? "";
+
+  // Coexistence — GET {phoneNumberId}?fields=is_on_biz_app,platform_type.
+  // Sin sembrar, el número es de Cloud API a secas (`is_on_biz_app: false`).
+  // Sembrado con `onBizApp: null` el mock OMITE el campo, que es como se ve
+  // cuando el token no tiene el permiso o la versión no lo reporta.
+  if (path.length === 1 && fields.includes("is_on_biz_app")) {
+    const flags = getWaMockState().phoneCoexistence[path[0]!];
+    const onBizApp = flags ? flags.onBizApp : false;
+    return Response.json({
+      id: path[0],
+      // `null` = el campo no se reporta, como con un token sin el permiso.
+      ...(onBizApp === null ? {} : { is_on_biz_app: onBizApp }),
+      platform_type: flags?.platformType ?? "CLOUD_API",
+    });
+  }
 
   // GET {phoneNumberId}?fields=webhook_configuration → el override vigente
   // del número y la callback URL de la app (ausente con un token "-sin-app").
@@ -415,6 +435,70 @@ export async function POST(req: Request, ctx: Params) {
     });
   }
 
+  // POST {phoneNumberId}/smb_app_data → pedir el relleno de coexistence
+  // (`history` o `smb_app_state_sync`). El mock imita lo que de verdad duele:
+  // es de UN solo uso por conexión (2593107 al repetir), exige que el número
+  // esté montado en la app del teléfono y el permiso de gestión.
+  if (path.length === 2 && path[1] === "smb_app_data") {
+    if (token.endsWith(SIN_GESTION)) return permissionErrorResponse();
+    const syncType = String(body.sync_type ?? "");
+    if (syncType !== "history" && syncType !== "smb_app_state_sync") {
+      return Response.json(
+        {
+          error: {
+            message: `(#100) Invalid parameter: sync_type ${syncType || "(vacío)"}`,
+            type: "OAuthException",
+            code: 100,
+            fbtrace_id: "mock",
+          },
+        },
+        { status: 400 }
+      );
+    }
+    const state = getWaMockState();
+    const phoneNumberId = path[0]!;
+    if (state.phoneCoexistence[phoneNumberId]?.onBizApp !== true) {
+      return Response.json(
+        {
+          error: {
+            message:
+              "(#100) Invalid parameter: this phone number is not using the WhatsApp Business app",
+            type: "OAuthException",
+            code: 100,
+            fbtrace_id: "mock",
+          },
+        },
+        { status: 400 }
+      );
+    }
+    if (
+      state.smbAppDataRequests.some(
+        (r) => r.phoneNumberId === phoneNumberId && r.syncType === syncType
+      )
+    ) {
+      return Response.json(
+        {
+          error: {
+            message:
+              "(#100) Invalid parameter: the data sync request was already made for this phone number",
+            type: "OAuthException",
+            code: 100,
+            error_subcode: 2593107,
+            fbtrace_id: "mock",
+          },
+        },
+        { status: 400 }
+      );
+    }
+    state.smbAppDataRequests.push({
+      n: nextN(),
+      phoneNumberId,
+      syncType,
+      at: new Date().toISOString(),
+    });
+    return Response.json({ success: true });
+  }
+
   // POST {wabaId}/message_templates → alta de plantilla (queda PENDING)
   if (path.length === 2 && path[1] === "message_templates") {
     const state = getWaMockState();
@@ -468,7 +552,12 @@ export async function POST(req: Request, ctx: Params) {
       typeof body.override_callback_uri === "string"
         ? body.override_callback_uri.trim()
         : "";
-    getWaMockState().wabaSubscriptions[path[0]!] = {
+    const state = getWaMockState();
+    // Se conserva `subscribedFields`: sembrado desde el self-test, representa lo
+    // que alguien puso en el panel de la app. Un POST de suscripción no lo toca
+    // en Meta (los campos no se escriben por API), así que tampoco aquí.
+    state.wabaSubscriptions[path[0]!] = {
+      ...state.wabaSubscriptions[path[0]!],
       overrideCallbackUri: uri || null,
     };
     return Response.json({ success: true });

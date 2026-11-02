@@ -1233,6 +1233,7 @@ async function main() {
   await atribucionChecks();
   await anuncioDeOrigenChecks();
   await r11BotChecks();
+  await r12CoexistenceChecks();
 
   console.log(`\n===== ${checks - failures}/${checks} checks OK, ${failures} fallos =====`);
   process.exit(failures > 0 ? 1 : 0);
@@ -3524,4 +3525,301 @@ async function r11BotChecks() {
     );
   }
   await api("/api/agent/profile", { method: "PUT", body: JSON.stringify({ enabled: false }) });
+}
+
+/* ============================================================
+ * R12 — Coexistence: la app de WhatsApp Business del teléfono
+ * convivendo con la Cloud API (tests/e2e/us-coexistence.md)
+ *
+ * Dos cosas caras, y por eso esta sección mide sobre todo lo que NO debe
+ * pasar:
+ *
+ *  - El relleno (`smb_app_data`) se pide UNA vez por conexión y dentro de las
+ *    24 h del alta. Gastarlo en un número que no tiene app del teléfono —o en
+ *    cada arranque— es perderlo.
+ *  - `history` es PASADO, no actividad. Si se tratara como un mensaje vivo,
+ *    un relleno de seis meses reabriría la ventana de 24 h (y Meta cobra el
+ *    envío fuera de ventana), llenaría la bandeja de no-leídos y pausaría al
+ *    bot de un golpe.
+ * ============================================================ */
+async function r12CoexistenceChecks() {
+  const RUN = Date.now().toString().slice(-6);
+  const WABA = "WABA-E2E";
+  const NEGOCIO = "5215500000000";
+  const TODOS = ["messages", "smb_message_echoes", "history", "smb_app_state_sync", "account_update"];
+
+  const sembrar = (body) =>
+    api("/api/dev/wa-mock/coexistence", { method: "POST", body: JSON.stringify(body) });
+  const estadoMock = async () => (await api("/api/dev/wa-mock/coexistence")).json ?? {};
+  const guardar = () =>
+    api("/api/settings/whatsapp", {
+      method: "PUT",
+      body: JSON.stringify({ wabaId: WABA, phoneNumberId: PN, token: "tok-e2e" }),
+    });
+  const conexion = async () => (await api("/api/settings/whatsapp")).json?.connection ?? null;
+  const pedidos = async () =>
+    ((await estadoMock()).smbAppDataRequests ?? []).filter((r) => r.phoneNumberId === PN);
+  const convDe = async (canonico) =>
+    ((await api("/api/conversations")).json?.conversations ?? []).find(
+      (c) => c.contact.phone === canonico
+    );
+  const mensajesDe = async (id) =>
+    (await api(`/api/conversations/${id}/messages`)).json?.messages ?? [];
+
+  console.log("\n== R12: el relleno solo se pide con la app del teléfono confirmada ==");
+
+  // 1. Número de Cloud API a secas: no se gasta la única ventana.
+  await sembrar({ phoneNumberId: PN, onBizApp: false, platformType: "CLOUD_API" });
+  const sinApp = await guardar();
+  ok(
+    "número normal: la conexión se guarda y NO se pide relleno",
+    sinApp.res.ok &&
+      sinApp.json?.sincronizacion === null &&
+      (await pedidos()).length === 0,
+    JSON.stringify({ status: sinApp.res.status, sync: sinApp.json?.sincronizacion })
+  );
+
+  // 2. Sembrado con `onBizApp: null` (Meta no reporta el campo): tampoco a ciegas.
+  await sembrar({ phoneNumberId: PN, onBizApp: null });
+  const sinReportar = await guardar();
+  ok(
+    "sin confirmación de Meta (campo no reportado) no se pide a ciegas",
+    sinReportar.json?.sincronizacion === null &&
+      sinReportar.json?.webhook?.coexistencia?.enAppDeNegocio === null,
+    JSON.stringify({ sync: sinReportar.json?.sincronizacion, coex: sinReportar.json?.webhook?.coexistencia })
+  );
+
+  // 3. Con la app del teléfono confirmada: se piden los DOS rellenos.
+  await sembrar({
+    phoneNumberId: PN,
+    onBizApp: true,
+    platformType: "BIZ_APP",
+    wabaId: WABA,
+    subscribedFields: ["messages", "smb_message_echoes"],
+  });
+  const conApp = await guardar();
+  ok(
+    "con is_on_biz_app en true, se piden history y smb_app_state_sync",
+    conApp.json?.sincronizacion?.length === 2 &&
+      conApp.json.sincronizacion.every((s) => s.ok === true) &&
+      conApp.json.sincronizacion.map((s) => s.syncType).join(",") ===
+        "history,smb_app_state_sync",
+    JSON.stringify(conApp.json?.sincronizacion)
+  );
+  ok(
+    "…y el mock de Meta los recibió los dos",
+    (await pedidos()).map((r) => r.syncType).join(",") === "history,smb_app_state_sync",
+    JSON.stringify(await pedidos())
+  );
+  ok(
+    "el diagnóstico reporta los campos que faltan en la app",
+    conApp.json?.webhook?.coexistencia?.campos?.faltan?.join(",") ===
+      "history,smb_app_state_sync,account_update",
+    JSON.stringify(conApp.json?.webhook?.coexistencia)
+  );
+
+  // 4. Guardar otra vez: Meta ya lo aceptó una vez. El CRM lo traduce a
+  //    «ya se pidió» y la conexión sigue guardándose (200).
+  const reguardado = await guardar();
+  ok(
+    "un segundo guardado NO vuelve a pedir el relleno: «ya solicitada» y 200",
+    reguardado.res.ok &&
+      reguardado.json?.sincronizacion?.length === 2 &&
+      reguardado.json.sincronizacion.every((s) => s.code === "ya_solicitada") &&
+      (await pedidos()).length === 2,
+    JSON.stringify({ sync: reguardado.json?.sincronizacion, pedidos: await pedidos() })
+  );
+
+  // 5. Con los cinco campos suscritos, el diagnóstico calla.
+  await sembrar({ wabaId: WABA, subscribedFields: TODOS });
+  const completo = await guardar();
+  ok(
+    "con los cinco campos suscritos no se alarma de nada",
+    completo.json?.webhook?.coexistencia?.campos?.faltan?.length === 0 &&
+      completo.json.webhook.coexistencia.campos.suscriptos?.length === TODOS.length,
+    JSON.stringify(completo.json?.webhook?.coexistencia?.campos)
+  );
+
+  console.log("\n== R12: history rellena la bandeja SIN reabrirla ==");
+  await sembrar({ phoneNumberId: PN, onBizApp: true, platformType: "BIZ_APP" });
+  const CANON = `524631${RUN}`;
+  const VIEJO = Math.floor(Date.now() / 1000) - 60 * 86400;
+  const relleno = {
+    phoneNumberId: PN,
+    businessNumber: NEGOCIO,
+    progress: "completed",
+    threads: [
+      {
+        id: CANON,
+        messages: [
+          { text: "hace dos meses me vendiste una licuadora", waMessageId: `wamid.e2e.r12.h1.${RUN}`, timestamp: VIEJO },
+          { fromMe: true, text: "claro, aquí tienes la garantía", waMessageId: `wamid.e2e.r12.h2.${RUN}`, timestamp: VIEJO + 120 },
+        ],
+      },
+    ],
+  };
+  const entregado = await api("/api/dev/wa-mock/history", {
+    method: "POST",
+    body: JSON.stringify(relleno),
+  });
+  await hasta(async () => Boolean(await convDe(CANON)));
+  const convRelleno = await convDe(CANON);
+  ok("el relleno crea la conversación del cliente viejo", entregado.res.ok && Boolean(convRelleno));
+
+  const viejos = await mensajesDe(convRelleno?.id);
+  ok(
+    "los dos mensajes entran con su fecha real y `origin: history`",
+    viejos.length === 2 &&
+      viejos.every((m) => m.origin === "history") &&
+      new Date(viejos[0]?.createdAt ?? 0).getTime() < Date.now() - 59 * 86400000,
+    JSON.stringify(viejos.map((m) => ({ o: m.origin, d: m.direction, t: m.waTimestamp ?? m.createdAt })))
+  );
+  ok(
+    "la dirección sale de `from_me`: el del negocio sale, el del cliente entra",
+    viejos.map((m) => m.direction).join(",") === "in,out",
+    JSON.stringify(viejos.map((m) => m.direction))
+  );
+  ok(
+    "y NO reabre la ventana de 24 h ni mueve el no-leído ni pausa la IA",
+    convRelleno?.lastInboundAt === null &&
+      convRelleno?.windowOpen === false &&
+      convRelleno?.unreadCount === 0 &&
+      convRelleno?.aiEnabled === true,
+    JSON.stringify({
+      lastInboundAt: convRelleno?.lastInboundAt,
+      windowOpen: convRelleno?.windowOpen,
+      unread: convRelleno?.unreadCount,
+      aiEnabled: convRelleno?.aiEnabled,
+    })
+  );
+  ok(
+    "`lastMessageAt` sí queda en el mensaje más viejo reciente",
+    convRelleno?.lastMessageAt === new Date((VIEJO + 120) * 1000).toISOString(),
+    JSON.stringify({ lastMessageAt: convRelleno?.lastMessageAt, esperado: VIEJO + 120 })
+  );
+
+  // Meta reenvía trozos: el mismo payload otra vez no duplica nada.
+  await api("/api/dev/wa-mock/history", { method: "POST", body: JSON.stringify(relleno) });
+  await sleep(400);
+  ok(
+    "el mismo trozo repetido no duplica los mensajes (idempotente por wa_message_id)",
+    (await mensajesDe(convRelleno?.id)).length === 2,
+    JSON.stringify(await mensajesDe(convRelleno?.id).then((m) => m.length))
+  );
+
+  // Control: un mensaje VIVO sí abre la ventana sobre la conversación rellena.
+  const VIVO = Math.floor(Date.now() / 1000);
+  await api("/api/dev/wa-mock/inbound", {
+    method: "POST",
+    body: JSON.stringify({
+      phoneNumberId: PN,
+      from: CANON,
+      text: "¿me pueden reimprimir la garantía?",
+      waMessageId: `wamid.e2e.r12.vivo.${RUN}`,
+      timestamp: VIVO,
+    }),
+  });
+  const viva = await hasta(async () => (await convDe(CANON))?.lastInboundAt !== null);
+  const convViva = await convDe(CANON);
+  ok(
+    "un entrante de HOY en esa misma conversación sí abre la ventana",
+    viva &&
+      convViva?.windowOpen === true &&
+      convViva?.unreadCount === 1 &&
+      (await mensajesDe(convViva.id)).length === 3,
+    JSON.stringify({ windowOpen: convViva?.windowOpen, unread: convViva?.unreadCount })
+  );
+
+  console.log("\n== R12: la agenda del teléfono (smb_app_state_sync) ==");
+  const CANON_AGENDA = `524632${RUN}`;
+  const CANON_BORRADO = `524633${RUN}`;
+  const sync = await api("/api/dev/wa-mock/contacts-sync", {
+    method: "POST",
+    body: JSON.stringify({
+      phoneNumberId: PN,
+      contactos: [
+        { phone: CANON_AGENDA, name: `R12 Agenda ${RUN}`, action: "update" },
+        { phone: CANON_BORRADO, name: "R12 Borrable", action: "delete" },
+      ],
+    }),
+  });
+  const contactoDe = async (canonico) =>
+    ((await api(`/api/contacts?q=${canonico}`)).json?.contacts ?? []).find(
+      (c) => (c.phone ?? "").replace(/\D/g, "") === canonico
+    );
+  await hasta(async () => Boolean(await contactoDe(CANON_AGENDA)));
+  ok("la agenda del dueño crea el contacto con su nombre", sync.res.ok && Boolean(await contactoDe(CANON_AGENDA)));
+  ok(
+    "el `delete` de un número del celular NO borra ni archiva un cliente del CRM",
+    !(await contactoDe(CANON_BORRADO)),
+    JSON.stringify(await contactoDe(CANON_BORRADO))
+  );
+
+  console.log("\n== R12: account_update, el dueño corta desde su teléfono ==");
+  // Llega a nivel WABA, sin `phone_number_id`: el CRM tiene que enrutarlo por
+  // `entry.id`.
+  await api("/api/dev/wa-mock/account-update", {
+    method: "POST",
+    body: JSON.stringify({
+      wabaId: WABA,
+      phoneNumberId: PN,
+      event: "ACCOUNT_OFFBOARDED",
+      reason: "El usuario cerró sesión",
+      initiatedBy: "user",
+      sinMetadata: true,
+    }),
+  });
+  const cortada = await hasta(async () => (await conexion())?.status === "reconnect_required");
+  ok(
+    "ACCOUNT_OFFBOARDED (por entry.id) pone la conexión en reconnect_required",
+    cortada,
+    JSON.stringify(await conexion())
+  );
+
+  await api("/api/dev/wa-mock/account-update", {
+    method: "POST",
+    body: JSON.stringify({ wabaId: WABA, phoneNumberId: PN, event: "ACCOUNT_RECONNECTED" }),
+  });
+  const vuelta = await hasta(async () => (await conexion())?.status === "connected");
+  ok(
+    "ACCOUNT_RECONNECTED reactiva los envíos, y esta vez por el phone_number_id",
+    vuelta,
+    JSON.stringify(await conexion())
+  );
+
+  await api("/api/dev/wa-mock/account-update", {
+    method: "POST",
+    body: JSON.stringify({ wabaId: WABA, phoneNumberId: PN, event: "PARTNER_REMOVED" }),
+  });
+  const removida = await hasta(async () => (await conexion())?.status === "reconnect_required");
+  ok("PARTNER_REMOVED también los pausa", removida, JSON.stringify(await conexion()));
+
+  // Una WABA que no es de esta instancia no puede moverle el estado a nadie.
+  await api("/api/dev/wa-mock/account-update", {
+    method: "POST",
+    body: JSON.stringify({ wabaId: "WABA-AJENA-9999", event: "ACCOUNT_OFFBOARDED", sinMetadata: true }),
+  });
+  await sleep(400);
+  ok(
+    "una cuenta desconocida se descarta sin tocar la conexión guardada",
+    (await conexion())?.status === "reconnect_required",
+    JSON.stringify(await conexion())
+  );
+
+  await api("/api/dev/wa-mock/account-update", {
+    method: "POST",
+    body: JSON.stringify({ wabaId: WABA, phoneNumberId: PN, event: "ACCOUNT_RECONNECTED" }),
+  });
+  await hasta(async () => (await conexion())?.status === "connected");
+
+  // El guion sigue con el número como estaba: sin app del teléfono y sin
+  // campos sembrados (el relleno ya no se puede volver a pedir en Meta).
+  await sembrar({
+    phoneNumberId: PN,
+    onBizApp: false,
+    platformType: "CLOUD_API",
+    wabaId: WABA,
+    subscribedFields: null,
+  });
+  await guardar();
 }

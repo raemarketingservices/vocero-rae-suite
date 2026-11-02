@@ -57,9 +57,42 @@ export type CapiMockEvent = {
  * override de callback si alguien lo configuró. Existe para que el self-test
  * pueda comprobar que guardar la conexión NO borra el override de un cerebro
  * externo: en Meta, un POST sin cuerpo lo elimina, y el mock hace lo mismo.
+ *
+ * `subscribedFields` es el otro lado de la misma consulta: los campos que la
+ * app tiene suscritos. En Meta se ponen en el panel y la API NO los escribe,
+ * así que el mock los deja SEMBRAR (`POST /api/dev/wa-mock/coexistence`) para
+ * poder probar tanto el diagnóstico en verde como el aviso de campo que falta.
  */
 export type MockWabaSubscription = {
   overrideCallbackUri: string | null;
+  subscribedFields?: string[] | null;
+};
+
+/**
+ * Un `POST {PHONE_NUMBER_ID}/smb_app_data` (relleno de coexistence). Se guarda
+ * para que el self-test compruebe que el CRM lo pidió, con qué `sync_type` y
+ * cuántas veces: en Meta es de un solo uso por conexión, y el mock devuelve el
+ * error de duplicado (subcode 2593107) en el segundo intento igual que Meta.
+ */
+export type MockSmbAppDataRequest = {
+  n: number;
+  phoneNumberId: string;
+  syncType: string;
+  at: string;
+};
+
+/**
+ * El número montado en la app de WhatsApp Business del teléfono
+ * (`is_on_biz_app`, `platform_type`). Sin sembrar, el mock responde como un
+ * número normal de Cloud API: `is_on_biz_app: false`.
+ *
+ * `onBizApp: null` imita al número cuyo campo NO se reporta (token sin el
+ * permiso, versión de Graph que no lo trae): es el caso en el que el CRM no
+ * puede afirmar nada y el pedido de relleno no se dispara.
+ */
+export type MockPhoneCoexistence = {
+  onBizApp: boolean | null;
+  platformType: string | null;
 };
 
 type WaMockState = {
@@ -74,6 +107,10 @@ type WaMockState = {
    * que quedó puesto (y que desconectar lo quita) sin mirar dentro del CRM.
    */
   phoneWebhooks: Record<string, string>;
+  /** Por phone_number_id: si el número está en la app del teléfono. */
+  phoneCoexistence: Record<string, MockPhoneCoexistence>;
+  /** Los `smb_app_data` que pidió el CRM, en orden. */
+  smbAppDataRequests: MockSmbAppDataRequest[];
   counter: number;
 };
 
@@ -86,6 +123,8 @@ function freshState(): WaMockState {
     capiEvents: [],
     wabaSubscriptions: {},
     phoneWebhooks: {},
+    phoneCoexistence: {},
+    smbAppDataRequests: [],
     counter: 0,
   };
 }
@@ -96,6 +135,8 @@ export function getWaMockState(): WaMockState {
   }
   // Un proceso de `next dev` que ya tenía el estado viejo en memoria.
   globalForMock.__waMockState.phoneWebhooks ??= {};
+  globalForMock.__waMockState.phoneCoexistence ??= {};
+  globalForMock.__waMockState.smbAppDataRequests ??= [];
   return globalForMock.__waMockState;
 }
 

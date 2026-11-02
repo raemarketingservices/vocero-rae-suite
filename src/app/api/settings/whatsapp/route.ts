@@ -12,6 +12,7 @@ import {
   testConnection,
   unregisterWebhookForNumber,
 } from "@/server/whatsapp/connect";
+import { solicitarSincronizacionesIniciales } from "@/server/whatsapp/coexistence";
 import {
   webhookPath,
   webhookUrl,
@@ -91,10 +92,31 @@ export const PUT = withAuth(async (session, req: Request) => {
     verifyToken: webhookVerifyToken(),
   });
 
+  /**
+   * Coexistence: el relleno de la app del teléfono (`history` de hasta 180 días
+   * y la agenda) se pide UNA sola vez por conexión y dentro de las 24 horas
+   * siguientes al alta, así que el momento es este —no el arranque del proceso,
+   * que no sabe cuándo fue el alta.
+   *
+   * Se pide solo si Meta CONFIRMA que el número está montado en la app de
+   * WhatsApp Business; sin esa confirmación no se gasta la única ventana. Y es
+   * best-effort: la conexión ya quedó guardada y envía aunque Meta no acepte.
+   */
+  const sincronizacion =
+    webhook.ok &&
+    "coexistencia" in webhook &&
+    webhook.coexistencia.enAppDeNegocio === true
+      ? await solicitarSincronizacionesIniciales({
+          phoneNumberId: body.data.phoneNumberId,
+          token: body.data.token,
+        })
+      : null;
+
   return Response.json({
     ok: true,
     displayPhoneNumber: check.displayPhoneNumber,
     webhook,
+    sincronizacion,
   });
 });
 

@@ -43,6 +43,17 @@ const subscriptions = () =>
   posts().filter(([path]) => path === `${WABA}/subscribed_apps`);
 
 /**
+ * Lo que responde esta «Meta» al diagnóstico de coexistence que cierra el
+ * registro: un número de Cloud API a secas. Es informativo, así que ninguna
+ * prueba de este archivo depende de él salvo en el `toEqual`.
+ */
+const SIN_COEXISTENCIA = {
+  enAppDeNegocio: false,
+  platformType: "CLOUD_API",
+  campos: { suscriptos: null, faltan: [] },
+};
+
+/**
  * Una «Meta» mínima: responde según la ruta, y recuerda el override del
  * número para que la confirmación lo devuelva tal cual lo pusieron.
  */
@@ -69,6 +80,9 @@ function metaFalsa(subscribedApps: unknown, phoneOverride: string | null = null)
         },
         id: PHONE,
       };
+    }
+    if (path === `${PHONE}?fields=is_on_biz_app,platform_type`) {
+      return { id: PHONE, is_on_biz_app: false, platform_type: "CLOUD_API" };
     }
     throw new Error(`ruta inesperada en la prueba: ${method} ${path}`);
   });
@@ -181,6 +195,7 @@ describe("registerWebhookForNumber — la WABA ya enruta a ESTA instancia (overr
     await expect(registerWebhookForNumber(opts)).resolves.toEqual({
       ok: true,
       appWithoutWebhook: false,
+      coexistencia: SIN_COEXISTENCIA,
     });
     expect(subscriptions()).toHaveLength(0);
     expect(meta.override).toBe(URL_PROPIA);
@@ -194,6 +209,7 @@ describe("registerWebhookForNumber — sin override (modo directo)", () => {
     await expect(registerWebhookForNumber(opts)).resolves.toEqual({
       ok: true,
       appWithoutWebhook: false,
+      coexistencia: SIN_COEXISTENCIA,
     });
 
     expect(subscriptions()).toEqual([[`${WABA}/subscribed_apps`, { method: "POST", token: TOKEN }]]);

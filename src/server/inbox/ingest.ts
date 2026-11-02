@@ -26,7 +26,7 @@ import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { maybeRunAgentTurn } from "@/server/ai/trigger";
 
 /** Tipos de contenido soportados; el resto se ignora sin error. */
-const SUPPORTED_TYPES = new Set([
+export const SUPPORTED_TYPES = new Set([
   "text",
   "image",
   "audio",
@@ -527,7 +527,11 @@ export async function ingestInboundMessage(input: {
   await maybeRunAgentTurn(conversation.id, organizationId);
 }
 
-function toDate(timestamp: string): Date {
+/**
+ * El `timestamp` del webhook es epoch en SEGUNDOS (cadenas); sin él o con un
+ * valor basura, ahora. Compartido con la ingesta del relleno de coexistence.
+ */
+export function toDate(timestamp: string): Date {
   const n = Number(timestamp);
   if (Number.isFinite(n) && n > 0) return new Date(n * 1000);
   return new Date();

@@ -425,9 +425,15 @@ export const message = pgTable(
      * 008 — Origen del saliente: IA (bot), operador del CRM, manual desde la
      * app de WhatsApp Business del teléfono (echo), o plantilla. En entrantes
      * queda el default y la UI lo ignora.
+     *
+     * `history` (coexistence): el relleno que Meta manda tras el alta, hasta
+     * 180 días de mensajes previos al CRM. Distinguirlo importa porque esos
+     * mensajes NO abren la ventana de 24 h, NO pausan a la IA y NO mueven el
+     * no-leído: son pasado. Es un `text` pelado en la BD —el enum solo es de
+     * TypeScript—, así que agregarlo no necesita migración.
      */
     origin: text("origin", {
-      enum: ["ai", "operator", "manual", "template"],
+      enum: ["ai", "operator", "manual", "template", "history"],
     })
       .notNull()
       .default("operator"),

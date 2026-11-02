@@ -134,6 +134,58 @@ export type WebhookStatus = {
   errors?: { code: number; title?: string; message?: string }[];
 };
 
+/* ---------- Coexistence: relleno de historia y agenda del teléfono ---------- */
+
+/**
+ * `history_context` de un mensaje del relleno: `from_me` dice si lo escribió
+ * el negocio (saliente) o el cliente (entrante), y `status` es el estado que
+ * tenía en el teléfono al momento de exportarse.
+ */
+export type WebhookHistoryContext = { status?: string; from_me?: boolean };
+
+export type WebhookHistoryMessage = {
+  from?: string;
+  id: string;
+  timestamp: string;
+  type: string;
+  text?: { body: string };
+  history_context?: WebhookHistoryContext;
+};
+
+/** Un hilo del relleno: `id` es el teléfono del cliente (wa_id). */
+export type WebhookHistoryThread = {
+  id?: string;
+  messages?: WebhookHistoryMessage[];
+};
+
+/**
+ * Un pedazo del relleno. Meta lo manda por FASES (0-1, 1-90, 90-180 días) y
+ * avisa en `progress` si sigue o terminó; un mismo trozo puede llegar
+ * repetido, así que la idempotencia por `wa_message_id` es obligatoria.
+ */
+export type WebhookHistoryChunk = {
+  metadata?: { phase?: string; chunk_order?: string; progress?: string };
+  threads?: WebhookHistoryThread[];
+};
+
+/**
+ * `smb_app_state_sync`: la agenda del teléfono del dueño. `action` es
+ * `update` o `delete`; el contacto viene anidado, aunque en la vida real se ha
+ * visto también plano.
+ */
+export type WebhookStateSyncEntry = {
+  type?: string;
+  action?: string;
+  contact?: {
+    phone_number?: string;
+    wa_id?: string;
+    full_name?: string;
+  };
+  phone_number?: string;
+  wa_id?: string;
+  full_name?: string;
+};
+
 export type WebhookValue = {
   messaging_product?: string;
   metadata?: { display_phone_number?: string; phone_number_id?: string };
@@ -142,12 +194,18 @@ export type WebhookValue = {
   /** Echoes de coexistence (008): mensajes enviados desde la app del teléfono. */
   message_echoes?: WebhookMessage[];
   statuses?: WebhookStatus[];
-  // message_template_status_update
+  /** Coexistence: relleno de hasta 180 días de mensajes previos. */
+  history?: WebhookHistoryChunk[];
+  /** Coexistence: cambios en la agenda del teléfono del dueño. */
+  state_sync?: WebhookStateSyncEntry[];
+  // message_template_status_update / account_update
   event?: string;
   message_template_name?: string;
   message_template_language?: string;
   message_template_id?: number | string;
   reason?: string | null;
+  /** `account_update`: quién cortó la conexión y por qué. */
+  disconnection_info?: { reason?: string; initiated_by?: string };
 };
 
 export type WebhookChange = { field?: string; value?: WebhookValue };

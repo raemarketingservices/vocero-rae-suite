@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *
  *   - `PUT /api/settings/whatsapp` guarda y registra la URL FIJA de esta
  *     instancia en el número; si Meta dice que no, la conexión queda guardada
- *     y la respuesta lo cuenta en `webhook`.
+ *     y la respuesta lo cuenta en `webhook`. Si además el número está montado
+ *     en la app de WhatsApp Business del teléfono, pide el relleno de
+ *     coexistence (`sincronizacion`) —una sola vez, así que solo con la
+ *     confirmación de Meta puesta.
  *   - `DELETE /api/settings/whatsapp` quita el override ANTES de borrar el
  *     token (sin él no se podría) y no toca nada más.
  *   - `POST /api/settings/webhook` reintenta con la conexión guardada: 409 sin
@@ -21,6 +24,7 @@ const register = vi.hoisted(() => vi.fn());
 const unregister = vi.hoisted(() => vi.fn(async () => {}));
 const save = vi.hoisted(() => vi.fn(async () => {}));
 const disconnect = vi.hoisted(() => vi.fn(async () => {}));
+const sync = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
 const creds = vi.hoisted(() => ({
   current: null as null | {
     source: string;
@@ -56,6 +60,9 @@ vi.mock("@/server/whatsapp/connect", () => ({
   registerWebhookForNumber: register,
   unregisterWebhookForNumber: unregister,
 }));
+vi.mock("@/server/whatsapp/coexistence", () => ({
+  solicitarSincronizacionesIniciales: sync,
+}));
 
 import { DELETE, PUT } from "@/app/api/settings/whatsapp/route";
 import { GET as webhookGet, POST as webhookPost } from "@/app/api/settings/webhook/route";
@@ -76,6 +83,8 @@ beforeEach(() => {
   unregister.mockClear();
   save.mockClear();
   disconnect.mockClear();
+  sync.mockReset();
+  sync.mockResolvedValue([]);
   creds.current = null;
 });
 
@@ -96,6 +105,7 @@ describe("guardar la conexión registra el webhook", () => {
       ok: true,
       displayPhoneNumber: "+52 55 0000 0000",
       webhook: { ok: true, appWithoutWebhook: false },
+      sincronizacion: null,
     });
   });
 
@@ -118,6 +128,80 @@ describe("guardar la conexión registra el webhook", () => {
     });
     await put();
     expect(register).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("el relleno de coexistence se pide al guardar", () => {
+  const coexistencia = (enAppDeNegocio: boolean | null) => ({
+    enAppDeNegocio,
+    platformType: enAppDeNegocio === false ? "CLOUD_API" : "BIZ_APP",
+    campos: { suscriptos: null, faltan: [] },
+  });
+
+  it("con el número en la app del teléfono: pide los dos rellenos y los devuelve", async () => {
+    register.mockResolvedValueOnce({
+      ok: true,
+      appWithoutWebhook: false,
+      coexistencia: coexistencia(true),
+    });
+    sync.mockResolvedValueOnce([{ ok: true, syncType: "history" }]);
+
+    const res = await put();
+    expect(sync).toHaveBeenCalledWith({ phoneNumberId: "222", token: "EAAG-token" });
+    expect((await res.json()).sincronizacion).toEqual([{ ok: true, syncType: "history" }]);
+  });
+
+  it("si Meta dice que el número NO está en la app, no se gasta la única ventana", async () => {
+    register.mockResolvedValueOnce({
+      ok: true,
+      appWithoutWebhook: false,
+      coexistencia: coexistencia(false),
+    });
+    const res = await put();
+    expect(sync).not.toHaveBeenCalled();
+    expect((await res.json()).sincronizacion).toBeNull();
+  });
+
+  it("sin confirmación de Meta (null) tampoco: no se pide a ciegas", async () => {
+    register.mockResolvedValueOnce({
+      ok: true,
+      appWithoutWebhook: false,
+      coexistencia: coexistencia(null),
+    });
+    await put();
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it("con el webhook rechazado no se pide nada: el relleno va sobre la conexión de esta instancia", async () => {
+    register.mockResolvedValueOnce({ ok: false, code: "meta_error", message: "no" });
+    const res = await put();
+    expect(res.status).toBe(200);
+    expect(sync).not.toHaveBeenCalled();
+    expect((await res.json()).sincronizacion).toBeNull();
+  });
+
+  it("Meta ya había pedido el relleno: guardar sigue devolviendo 200 con el motivo", async () => {
+    register.mockResolvedValueOnce({
+      ok: true,
+      appWithoutWebhook: false,
+      coexistencia: coexistencia(true),
+    });
+    sync.mockResolvedValueOnce([
+      {
+        ok: false,
+        syncType: "history",
+        code: "ya_solicitada",
+        message: "El relleno ya se había pedido para esta conexión.",
+      },
+    ]);
+
+    const res = await put();
+    expect(res.status).toBe(200);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect((await res.json()).sincronizacion[0]).toMatchObject({
+      ok: false,
+      code: "ya_solicitada",
+    });
   });
 });
 

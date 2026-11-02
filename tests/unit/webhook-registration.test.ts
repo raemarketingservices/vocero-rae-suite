@@ -75,16 +75,31 @@ describe("registro automático del webhook en Meta", () => {
   const sinOverride = () => respond({ data: [{ whatsapp_business_api_data: { id: "app-1" } }] });
   const confirmado = (application = "https://app-de-meta.test/webhook") =>
     respond({ webhook_configuration: { phone_number: URL_PROPIA, application }, id: "222" });
+  /**
+   * El GET de coexistence que el registro hace al final. `false` deja el
+   * diagnóstico corto (sin leer los campos) y es el caso normal de una Cloud
+   * API sin app del teléfono encima; los flujos con coexistence están en
+   * `tests/unit/coexistence.test.ts`.
+   */
+  const sinAppDeNegocio = () =>
+    respond({ id: "222", is_on_biz_app: false, platform_type: "CLOUD_API" });
+  const SIN_COEXISTENCIA = {
+    enAppDeNegocio: false,
+    platformType: "CLOUD_API",
+    campos: { suscriptos: null, faltan: [] },
+  };
 
   it("suscribe la app a la WABA, pone el override en el NÚMERO con el verify token y lo confirma", async () => {
     sinOverride();
     respond({ success: true });
     respond({ success: true });
     confirmado();
+    sinAppDeNegocio();
 
     expect(await registerWebhookForNumber(opts)).toEqual({
       ok: true,
       appWithoutWebhook: false,
+      coexistencia: SIN_COEXISTENCIA,
     });
 
     expect(call(0)).toMatchObject({
@@ -115,7 +130,13 @@ describe("registro automático del webhook en Meta", () => {
       url: "https://graph.facebook.com/v25.0/222?fields=webhook_configuration",
       method: "GET",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // 4 · Y el diagnóstico de coexistence, que se corta aquí: el número no
+    // está en la app del teléfono, así que no hay campos que revisar.
+    expect(call(4)).toMatchObject({
+      url: "https://graph.facebook.com/v25.0/222?fields=is_on_biz_app,platform_type",
+      method: "GET",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
   it("avisa si la app de Meta no tiene webhook propio", async () => {
@@ -123,9 +144,11 @@ describe("registro automático del webhook en Meta", () => {
     respond({ success: true });
     respond({ success: true });
     respond({ webhook_configuration: { phone_number: URL_PROPIA }, id: "222" });
+    sinAppDeNegocio();
     expect(await registerWebhookForNumber(opts)).toEqual({
       ok: true,
       appWithoutWebhook: true,
+      coexistencia: SIN_COEXISTENCIA,
     });
   });
 

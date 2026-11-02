@@ -38,9 +38,31 @@ type WebhookInfo = {
   signatureLayer: boolean;
 };
 
+/** El diagnóstico de coexistence que acompaña al registro (informativo). */
+type CoexistenceCheck = {
+  /** `null` = Meta no lo reporta; entonces la tarjeta no dice nada. */
+  enAppDeNegocio: boolean | null;
+  platformType: string | null;
+  campos: { suscriptos: string[] | null; faltan: string[] };
+};
+
+/** Lo que Meta contestó al pedir el relleno de la app del teléfono. */
+type SolicitudSync = {
+  ok: boolean;
+  syncType: "history" | "smb_app_state_sync";
+  code?: string;
+  message?: string;
+};
+
 /** Lo que devuelve el registro del webhook en Meta (al guardar o a demanda). */
 type WebhookRegistration =
-  | { ok: true; appWithoutWebhook: boolean }
+  | {
+      ok: true;
+      appWithoutWebhook: boolean;
+      coexistencia?: CoexistenceCheck;
+      /** Solo la trae el guardado: el botón de registro no pide relleno. */
+      sincronizacion?: SolicitudSync[] | null;
+    }
   | { ok: true; skipped: "waba_override"; host: string }
   | { ok: false; message: string };
 
@@ -93,7 +115,7 @@ export function WhatsappWizard() {
             <p className="font-medium text-danger-text">
               {porZernio
                 ? "La API key de Zernio ya no sirve."
-                : "El token de WhatsApp expiró o fue revocado."}
+                : "El token de WhatsApp ya no sirve: expiró, fue revocado o desconectaste la cuenta desde tu teléfono."}
             </p>
             <p className="text-danger-text opacity-80">
               Los envíos están pausados. Reconecta el número abajo: escaneando
@@ -361,8 +383,14 @@ function ConnectForm({
     }
     const saved = (await res.json().catch(() => null)) as {
       webhook?: WebhookRegistration;
+      sincronizacion?: SolicitudSync[] | null;
     } | null;
-    onRegistration(saved?.webhook ?? null);
+    const reg = saved?.webhook ?? null;
+    onRegistration(
+      reg && reg.ok && "appWithoutWebhook" in reg
+        ? { ...reg, sincronizacion: saved?.sincronizacion ?? null }
+        : reg
+    );
     setToken("");
     setTestResult(null);
     onSaved();
@@ -504,11 +532,17 @@ function RegistrationNotice({
   }
   if (registration.ok && !registration.appWithoutWebhook) {
     return (
-      <p className="flex items-start gap-2 text-sm text-success">
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-        Webhook registrado en Meta: los mensajes de este número llegan aquí.
-        No hace falta pegar nada en el panel de tu app.
-      </p>
+      <div className="space-y-2">
+        <p className="flex items-start gap-2 text-sm text-success">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          Webhook registrado en Meta: los mensajes de este número llegan aquí.
+          No hace falta pegar nada en el panel de tu app.
+        </p>
+        <CoexistenceNotice
+          check={registration.coexistencia}
+          sync={registration.sincronizacion}
+        />
+      </div>
     );
   }
   return (
@@ -533,6 +567,148 @@ function RegistrationNotice({
       </span>
     </p>
   );
+}
+
+/**
+ * Coexistence, en dos líneas.
+ *
+ * Meta no deja suscribir campos del webhook por API para WhatsApp: se activan
+ * UNA vez en el panel de la app. Lo que el CRM sí puede hacer es decir si el
+ * número está montado en la app de WhatsApp Business del teléfono, si a la app
+ * le falta algún campo, y si el relleno (historial + agenda) se pudo pedir.
+ * Sin estos avisos, un hueco de `history` se confunde con «el CRM no funciona»
+ * y se va a revisar el sitio equivocado.
+ *
+ * Nunca es un error: el número funciona igual con o sin coexistence.
+ */
+function CoexistenceNotice({
+  check,
+  sync,
+}: {
+  check?: CoexistenceCheck;
+  sync?: SolicitudSync[] | null;
+}) {
+  if (!check || check.enAppDeNegocio !== true) return null;
+  const campos = camposNote(check);
+  const relleno = rellenoNote(sync);
+  if (!campos && !relleno) return null;
+  return (
+    <div className="space-y-2">
+      {campos}
+      {relleno}
+    </div>
+  );
+}
+
+/** Qué campos le faltan a la app (o por qué no se puede saber). */
+function camposNote(check: CoexistenceCheck) {
+  if (!check.campos.suscriptos) {
+    return (
+      <p className="flex items-start gap-2 text-xs text-muted-foreground">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          El número está en la app de WhatsApp Business del teléfono, pero el
+          token no reporta los campos suscritos de tu app: no se puede verificar
+          la coexistence. Los mensajes escritos a mano desde el teléfono sí
+          llegan.
+        </span>
+      </p>
+    );
+  }
+
+  if (check.campos.faltan.length === 0) {
+    return (
+      <p className="flex items-start gap-2 text-xs text-muted-foreground">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          Coexistence completa: la app tiene suscritos los cinco campos, así que
+          el CRM recibe también el relleno de hasta 180 días de conversaciones
+          previas y la agenda del teléfono.
+        </span>
+      </p>
+    );
+  }
+
+  return (
+    <p className="flex items-start gap-2 rounded-md border border-warning-soft bg-warning-tint p-3 text-xs text-warning-text">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>
+        El número está en la app de WhatsApp Business, pero a tu app le faltan
+        los campos{" "}
+        <span className="text-foreground">
+          {check.campos.faltan.map(descubrirCampo).join(", ")}
+        </span>{" "}
+        del webhook. En developers.facebook.com → tu app → WhatsApp →
+        Configuración suscríbelos (es una sola vez por app, y la API no puede
+        hacerlo por ti). El resto funciona igual.
+      </span>
+    </p>
+  );
+}
+
+/**
+ * Si Meta aceptó (o no) el relleno. Se pide una sola vez por conexión y dentro
+ * de las 24 horas del alta, así que cuando falla hay que decirlo: no hay
+ * segundo intento posible y el dueño tiene que saber que el hueco es para
+ * siempre.
+ */
+function rellenoNote(sync?: SolicitudSync[] | null) {
+  if (!sync || sync.length === 0) return null;
+  const fallidas = sync.filter((s) => !s.ok);
+
+  if (fallidas.length === 0) {
+    return (
+      <p className="flex items-start gap-2 text-xs text-muted-foreground">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          Meta va a mandar las conversaciones anteriores al alta (hasta 180 días)
+          y la agenda del teléfono; pueden tardar unos minutos en aparecer en la
+          bandeja.
+        </span>
+      </p>
+    );
+  }
+
+  return (
+    <p className="flex items-start gap-2 rounded-md border border-warning-soft bg-warning-tint p-3 text-xs text-warning-text">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>
+        Los mensajes nuevos funcionan, pero el relleno no se pudo pedir:{" "}
+        {fallidas
+          .map((s) =>
+            s.code === "ya_solicitada"
+              ? `${nombreSync(s.syncType)} ya se había pedido con esta conexión`
+              : `${nombreSync(s.syncType)}: ${s.message ?? "Meta no lo aceptó"}`
+          )
+          .join("; ")}
+        . El relleno se pide una sola vez y dentro de las 24 horas siguientes al
+        alta, así que las conversaciones previas no van a llegar.
+      </span>
+    </p>
+  );
+}
+
+/** El tipo de relleno, en lo que le dice algo al dueño. */
+function nombreSync(syncType: SolicitudSync["syncType"]): string {
+  return syncType === "history" ? "el historial" : "la agenda del teléfono";
+}
+
+/** El campo, en lo que le dice algo al dueño de la tienda. */
+function descubrirCampo(campo: string): string {
+  switch (campo) {
+    case "messages":
+      return "messages (mensajes entrantes)";
+    case "smb_message_echoes":
+      return "smb_message_echoes (lo que escribas a mano desde el teléfono)";
+    case "history":
+      return "history (las conversaciones previas al alta)";
+    case "smb_app_state_sync":
+      return "smb_app_state_sync (la agenda del teléfono)";
+    case "account_update":
+      return "account_update (el aviso si desconectas la cuenta)";
+    default:
+      return campo;
+  }
 }
 
 function WebhookCard({
