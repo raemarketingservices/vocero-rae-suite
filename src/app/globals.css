@@ -306,6 +306,23 @@
     }
   }
 
+  /* Pantalla de acceso: la oficina de fondo y, encima, un velo azul marino más
+     opaco a la izquierda (donde van las letras) y casi transparente a la
+     derecha, que es la parte clara de la foto. El color del texto no se escribe
+     aquí: lo pone `.nav-dark` en la misma caja. */
+  .auth-photo {
+    background-image:
+      linear-gradient(
+        90deg,
+        rgba(6, 20, 52, 0.9) 0%,
+        rgba(6, 20, 52, 0.72) 42%,
+        rgba(6, 20, 52, 0.34) 100%
+      ),
+      url("/brand/login-oficina.jpg");
+    background-size: cover;
+    background-position: center;
+  }
+
   /* Fondo del hilo: un leve resplandor del acento en la esquina, como en el
      mockup de la landing. Si el navegador no sabe color-mix, queda el plano. */
   .thread-bg {
