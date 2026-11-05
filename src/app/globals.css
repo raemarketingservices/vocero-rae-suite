@@ -314,9 +314,9 @@
     background-image:
       linear-gradient(
         90deg,
-        rgba(6, 20, 52, 0.9) 0%,
-        rgba(6, 20, 52, 0.72) 42%,
-        rgba(6, 20, 52, 0.34) 100%
+        rgba(6, 20, 52, 0.78) 0%,
+        rgba(6, 20, 52, 0.58) 42%,
+        rgba(6, 20, 52, 0.26) 100%
       ),
       url("/brand/login-oficina.jpg");
     background-size: cover;

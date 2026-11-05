@@ -30,7 +30,7 @@ export default async function AuthLayout({
 
   return (
     <main className="relative flex min-h-dvh flex-col overflow-hidden bg-subtle lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:flex-row">
-      <section className="nav-dark auth-photo relative hidden flex-col justify-between px-10 py-9 lg:flex">
+      <section className="nav-dark auth-photo relative hidden flex-col justify-between px-10 py-9 text-foreground lg:flex">
         <div>
           <BrandLogo branding={branding} size="lg" multiline />
         </div>
