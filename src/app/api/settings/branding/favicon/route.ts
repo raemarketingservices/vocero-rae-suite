@@ -3,6 +3,7 @@ import { apiError, withAuth } from "@/lib/api";
 import {
   FAVICON_ASSET,
   MAX_FAVICON_BYTES,
+  MAX_FAVICON_MB,
   sniffFaviconMime,
 } from "@/lib/favicon";
 import { getBranding, saveBranding } from "@/server/branding";
@@ -28,7 +29,7 @@ export const PUT = withAuth(async (session, req: Request) => {
     return apiError(
       413,
       "too_large",
-      `El icono no puede pasar de ${Math.round(MAX_FAVICON_BYTES / 1024)} KB`
+      `El logo no puede pasar de ${MAX_FAVICON_MB} MB`
     );
   }
 

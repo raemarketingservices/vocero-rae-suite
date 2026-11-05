@@ -1,7 +1,7 @@
 import { DEFAULT_CURRENCY, isCurrency, type Currency } from "@/lib/money";
 
 /**
- * White-label: nombre del CRM, acento y moneda por organización.
+ * White-label: nombre del CRM, acento, descripción y moneda por organización.
  * Presets sobrios del sistema Atlas; para un color personalizado se derivan
  * hover/soft/tint/text y la tinta encima (blanca o casi negra) pasa AA.
  */
@@ -35,6 +35,8 @@ export type BrandingFavicon = {
   version: number;
 };
 
+export const MAX_BRANDING_DESCRIPTION = 140;
+
 export type Branding = {
   name: string;
   accent: string; // hex del acento base elegido
@@ -42,6 +44,8 @@ export type Branding = {
   currency: Currency;
   /** `null` = se dibuja con la inicial sobre el acento (ver `lib/favicon`). */
   favicon: BrandingFavicon | null;
+  /** Qué es el negocio, en una línea. Se ve donde la marca se presenta sola. */
+  description: string;
 };
 
 export const DEFAULT_BRANDING: Branding = {
@@ -52,6 +56,7 @@ export const DEFAULT_BRANDING: Branding = {
   accent: "#2d4aff",
   currency: DEFAULT_CURRENCY,
   favicon: null,
+  description: "Suite CRM de WhatsApp con agente de IA",
 };
 
 /**
@@ -288,6 +293,8 @@ export function normalizeBranding(input: Partial<Branding> | null): Branding {
   const currency = isCurrency(input?.currency)
     ? input.currency
     : DEFAULT_BRANDING.currency;
+  const description =
+    input?.description?.trim().slice(0, MAX_BRANDING_DESCRIPTION) ?? "";
   // El icono no se toca desde el formulario de marca: se sube y se quita por
   // su propia ruta. Un PUT de nombre/color no debe borrarlo de rebote.
   const f = input?.favicon;
@@ -295,5 +302,5 @@ export function normalizeBranding(input: Partial<Branding> | null): Branding {
     f && typeof f.mime === "string" && Number.isFinite(f.version)
       ? { mime: f.mime, version: Math.max(1, Math.floor(f.version)) }
       : null;
-  return { name, accent, currency, favicon };
+  return { name, accent, currency, favicon, description };
 }

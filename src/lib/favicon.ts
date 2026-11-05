@@ -35,10 +35,18 @@ export const FAVICON_MIMES = [
 export type FaviconMime = (typeof FAVICON_MIMES)[number];
 
 /**
- * 256 KB. Un favicon de más no existe; el tope está para que nadie use este
- * campo como almacén de archivos.
+ * 5 MB, el mismo tope que la Cloud API pone a una imagen. Un logo de tienda
+ * llega en PNG a pantalla completa o exportado desde el vector del diseñador,
+ * y exigirle que quepa en 256 KB obligaba a recomprimirlo fuera del CRM. El
+ * límite sigue ahí para que nadie use este campo como almacén de archivos.
  */
-export const MAX_FAVICON_BYTES = 256 * 1024;
+export const MAX_FAVICON_BYTES = 5 * 1024 * 1024;
+
+/** El mismo tope dicho en MB, que es como se lo decimos a la gente. */
+export const MAX_FAVICON_MB = MAX_FAVICON_BYTES / (1024 * 1024);
+
+/** Lo que pesa un logo de pestaña razonable: por encima se avisa, no se bloquea. */
+export const RECOMMENDED_FAVICON_BYTES = 256 * 1024;
 
 export function isFaviconMime(value: string): value is FaviconMime {
   return (FAVICON_MIMES as readonly string[]).includes(value);

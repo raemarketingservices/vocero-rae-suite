@@ -4,7 +4,7 @@ import { IBM_Plex_Mono, Montserrat, Yellowtail } from "next/font/google";
 import { accentCssVariables, DEFAULT_BRANDING } from "@/lib/branding";
 import { faviconHref } from "@/lib/favicon";
 import { normalizeThemePreference, THEME_COOKIE } from "@/lib/theme";
-import { getBranding } from "@/server/branding";
+import { brandingDePeticion } from "@/server/branding";
 import "./globals.css";
 
 // Las tres voces de la marca RAE: Montserrat para la interfaz (la principal
@@ -31,12 +31,28 @@ const plexMono = IBM_Plex_Mono({
 
 export const dynamic = "force-dynamic";
 
+/**
+ * La marca de QUIEN MIRA. Con sesión es la de su tienda —el acento, el nombre,
+ * el logo y la descripción que puso en Configuración → Marca—; sin sesión es la
+ * de la plataforma. Es la marca de la propia sesión y nada más: un cliente no
+ * ve la cara de otro, y el login sigue siendo de RAE para todos.
+ *
+ * Si el entorno falla (base de datos en el aire durante un arranque) queda la
+ * marca del código: una página pública sin pintar vale más que un 500.
+ */
+async function marcaDePagina() {
+  try {
+    return (await brandingDePeticion()).branding;
+  } catch {
+    return DEFAULT_BRANDING;
+  }
+}
+
 export async function generateMetadata(): Promise<Metadata> {
-  const branding = await getBranding().catch(() => DEFAULT_BRANDING);
+  const branding = await marcaDePagina();
   return {
     title: `${branding.name} — Suite CRM de WhatsApp`,
-    description:
-      "Suite CRM de WhatsApp con agente de IA y Laboratorio de auto-evaluación",
+    description: branding.description || DEFAULT_BRANDING.description,
     // El `?v=` cambia con la marca: los navegadores guardan el favicon con una
     // insistencia notable y, sin eso, el logo nuevo tarda días en aparecer.
     icons: { icon: faviconHref(branding) },
@@ -46,7 +62,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const branding = await getBranding().catch(() => DEFAULT_BRANDING);
+  const branding = await marcaDePagina();
   const theme = normalizeThemePreference(
     (await cookies()).get(THEME_COOKIE)?.value
   );

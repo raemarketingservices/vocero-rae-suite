@@ -1,13 +1,17 @@
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getSessionOrNull } from "@/lib/auth/session";
-import { isValidHex, resolveAccentSet } from "@/lib/branding";
+import {
+  MAX_BRANDING_DESCRIPTION,
+  isValidHex,
+  resolveAccentSet,
+} from "@/lib/branding";
 import { CURRENCIES } from "@/lib/money";
 import { getBranding, saveBranding } from "@/server/branding";
 
 export const dynamic = "force-dynamic";
 
-/** GET público: el login necesita la marca antes de autenticarse. */
+/** GET: la marca de quien mira; sin sesión, la de la plataforma. */
 export async function GET() {
   const session = await getSessionOrNull();
   const branding = await getBranding(session?.organizationId);
@@ -19,6 +23,8 @@ const putSchema = z.object({
   accent: z.string().refine(isValidHex, "Color hex inválido (#rrggbb)"),
   /** La moneda del negocio: la única que el tablero suma. */
   currency: z.enum(CURRENCIES),
+  /** Qué es el negocio, en una línea. */
+  description: z.string().trim().max(MAX_BRANDING_DESCRIPTION).default(""),
 });
 
 export const PUT = withAuth(async (session, req: Request) => {

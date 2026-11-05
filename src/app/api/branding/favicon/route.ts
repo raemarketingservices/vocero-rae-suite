@@ -1,5 +1,6 @@
 import { readMediaFile } from "@/server/whatsapp/media";
-import { getBrandingContext } from "@/server/branding";
+import { brandingDePeticion } from "@/server/branding";
+import { PLATFORM_LOGO_DIR } from "@/server/platform-branding";
 import { DEFAULT_BRANDING } from "@/lib/branding";
 import { FAVICON_ASSET, generatedFaviconSvg } from "@/lib/favicon";
 
@@ -12,8 +13,13 @@ export const dynamic = "force-dynamic";
  * alguien navega a su URL. La CSP lo deja sin nada que ejecutar y `nosniff`
  * impide que el navegador reinterprete el tipo. Cuesta dos cabeceras y quita
  * de la mesa toda esa clase de problema.
+ *
+ * `private` cuando el icono depende de la sesión: la respuesta NO es la misma
+ * para dos tiendas, así que ninguna caché compartida puede reutilizarla. El
+ * de la plataforma, que es idéntico para todos, sigue siendo cacheable en
+ * común.
  */
-function cabeceras(mime: string, cacheable: boolean): HeadersInit {
+function cabeceras(mime: string, cacheable: boolean, privado: boolean): HeadersInit {
   return {
     "content-type": mime,
     "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
@@ -21,28 +27,33 @@ function cabeceras(mime: string, cacheable: boolean): HeadersInit {
     // La URL lleva `?v=` y cambia con la marca, así que se puede cachear
     // fuerte. Sin ese sufijo —alguien pidiendo la ruta pelada— no.
     "cache-control": cacheable
-      ? "public, max-age=31536000, immutable"
-      : "public, max-age=60",
+      ? `${privado ? "private" : "public"}, max-age=31536000, immutable`
+      : `${privado ? "private" : "public"}, max-age=60`,
   };
 }
 
 /**
  * El icono de la pestaña. **Ruta pública**: el login también tiene pestaña, y
- * ahí todavía no hay sesión. Es la misma decisión que ya toma el GET de la
- * marca — en una instancia de un solo negocio, su nombre y su logo no son un
- * secreto.
+ * ahí todavía no hay sesión.
+ *
+ * Con sesión sirve el logo de ESA tienda y sin ella el de la plataforma; la
+ * organización nunca sale de un parámetro de la URL, siempre de la sesión, así
+ * que nadie puede pedir el logo de otro escribiendo su id.
  */
 export async function GET(req: Request) {
   const cacheable = new URL(req.url).searchParams.has("v");
-
-  const ctx = await getBrandingContext().catch(() => null);
+  const ctx = await brandingDePeticion().catch(() => null);
   const branding = ctx?.branding ?? DEFAULT_BRANDING;
+  // Sin organización propia, el logo vive en la carpeta reservada de la
+  // plataforma; con ella, en la carpeta de esa tienda.
+  const carpeta = ctx?.organizationId ?? PLATFORM_LOGO_DIR;
+  const plataforma = !ctx?.organizationId;
 
-  if (ctx?.organizationId && branding.favicon) {
+  if (branding.favicon) {
     try {
-      const buf = await readMediaFile(ctx.organizationId, FAVICON_ASSET);
+      const buf = await readMediaFile(carpeta, FAVICON_ASSET);
       return new Response(new Uint8Array(buf), {
-        headers: cabeceras(branding.favicon.mime, cacheable),
+        headers: cabeceras(branding.favicon.mime, cacheable, !plataforma),
       });
     } catch {
       // El archivo se perdió (volumen sin montar, restauración a medias). Se
@@ -52,6 +63,6 @@ export async function GET(req: Request) {
   }
 
   return new Response(generatedFaviconSvg(branding), {
-    headers: cabeceras("image/svg+xml", cacheable),
+    headers: cabeceras("image/svg+xml", cacheable, !plataforma),
   });
 }

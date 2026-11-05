@@ -155,6 +155,13 @@
       "when": 1793395344857,
       "tag": "0021_tienda_uniko",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793868302369,
+      "tag": "0022_marca_plataforma",
+      "breakpoints": true
     }
   ]
 }

@@ -119,6 +119,32 @@ export const invitation = pgTable("invitation", {
 });
 
 /* ============================================================
+ * Marca de la plataforma (una sola fila, sin organization_id)
+ * ============================================================ */
+
+/**
+ * Lo que ve quien NO ha entrado a ninguna tienda: el login, el registro y el
+ * cascarón del panel.
+ *
+ * Es la única tabla sin `organization_id` del esquema, y por eso no es de
+ * dominio: es LA instancia. Mientras la marca de cada tienda vive en su
+ * `organization.metadata` y solo pinta dentro de esa tienda, esta decide el
+ * aspecto global — y la edita únicamente el admin de la plataforma.
+ */
+export const platformBrand = pgTable("platform_brand", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  accent: text("accent").notNull(),
+  description: text("description").notNull().default(""),
+  /** `{ mime, version }` del logo subido, o null → se dibuja el de la marca. */
+  logo: jsonb("logo"),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+/* ============================================================
  * Dominio (toda tabla lleva organization_id NOT NULL + índice org-first)
  * ============================================================ */
 
