@@ -73,22 +73,41 @@ const TILE_SIZE = {
  * La marca completa: mosaico (o logo de la plataforma) + nombre del espacio.
  * Una instancia rebautizada ve su inicial y su nombre (white-label); quien
  * sube un logo lo ve aunque se llame como se llame.
+ *
+ * `multiline` es para las barras laterales angostas: un nombre de tres palabras
+ * ("RAE Marketing Services") con `truncate` se leía "RAE Marketing…", que es
+ * exactamente el reclamo del admin. Cortar por palabras cuesta una línea más
+ * de barra; cortar por puntos suspensivos cuesta la marca entera.
  */
 export function BrandLogo({
   branding,
   size = "md",
+  multiline = false,
   className,
 }: {
   branding: BrandingMark;
   size?: keyof typeof TILE_SIZE;
+  multiline?: boolean;
   className?: string;
 }) {
   return (
-    <span className={cn("flex min-w-0 items-center gap-2.5", className)}>
-      <BrandTile branding={branding} className={TILE_SIZE[size]} />
+    <span
+      className={cn(
+        "flex min-w-0 items-center gap-2.5",
+        multiline && "items-start",
+        className
+      )}
+    >
+      <BrandTile
+        branding={branding}
+        className={cn(TILE_SIZE[size], multiline && "mt-0.5")}
+      />
       <span
         className={cn(
-          "truncate font-[750] leading-none tracking-tight",
+          "font-[750] tracking-tight",
+          multiline
+            ? "leading-[1.12] [text-wrap:balance] break-words"
+            : "truncate leading-none",
           size === "lg" ? "text-[26px]" : "text-[17px]"
         )}
       >

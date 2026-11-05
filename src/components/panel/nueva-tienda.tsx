@@ -24,18 +24,20 @@ type Creada = { organizationId: string; nombre: string; email: string; password:
  * Better Auth). Si se pierde, se cambia desde el panel de Equipo de esa tienda
  * o se le manda a recuperar por correo.
  *
- * El formulario está plegado detrás del botón: es una acción rara (el cliente
- * se autoregistra) y abierto ocupaba media pantalla de tiendas.
+ * Lo abre y lo cierra el tablero desde su botón "Crear tienda": el formulario
+ * ya no lleva su propio interruptor, porque el panel lo pide arriba a la
+ * derecha, junto al título.
  */
-export function NuevaTienda() {
+export function NuevaTienda({ abierto }: { abierto: boolean }) {
   const router = useRouter();
-  const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creada, setCreada] = useState<Creada | null>(null);
+
+  if (!abierto) return null;
 
   async function crear() {
     setOcupado(true);
@@ -66,9 +68,9 @@ export function NuevaTienda() {
   }
 
   return (
-    <Card>
-      <div className="flex flex-wrap items-center gap-3 p-4">
-        <div className="min-w-0 flex-1">
+    <Card className="mt-4">
+      <CardContent className="space-y-4 pt-4">
+        <div>
           <CardTitle className="text-[15px]">Nueva tienda</CardTitle>
           <CardDescription className="mt-1">
             Crea el espacio del cliente —organización, propietario y pipeline— y
@@ -76,90 +78,77 @@ export function NuevaTienda() {
             abierto, él también puede creársela solo desde <code>/register</code>.
           </CardDescription>
         </div>
-        <Button
-          variant={abierto ? "outline" : "default"}
-          size="sm"
-          aria-expanded={abierto}
-          onClick={() => setAbierto((v) => !v)}
-        >
-          <Plus className="h-4 w-4" />
-          {abierto ? "Cerrar" : "Crear tienda"}
-        </Button>
-      </div>
 
-      {abierto && (
-        <CardContent className="border-t pt-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="flex flex-col gap-1.5">
-              <Label htmlFor="nt-nombre">Nombre del negocio</Label>
-              <Input
-                id="nt-nombre"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Uniko RD"
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="flex flex-col gap-1.5">
+            <Label htmlFor="nt-nombre">Nombre del negocio</Label>
+            <Input
+              id="nt-nombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Uniko RD"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <Label htmlFor="nt-email">Correo del cliente</Label>
+            <Input
+              id="nt-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="dueno@negocio.com"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <Label htmlFor="nt-password">Contraseña inicial (opcional)</Label>
+            <Input
+              id="nt-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Si la dejas vacía, se genera una"
+            />
+          </label>
+        </div>
+
+        {error && <p className="text-[13px] text-destructive">{error}</p>}
+
+        <div>
+          <Button onClick={crear} disabled={ocupado || nombre.trim().length < 2 || !email.trim()}>
+            {ocupado ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            Crear tienda
+          </Button>
+        </div>
+
+        {creada && (
+          <div className="rounded-lg border border-info-soft bg-info-tint p-3 text-[13px] text-info-text">
+            <p className="font-semibold text-foreground">
+              {creada.nombre} creada. Estos son los accesos del cliente, se
+              muestran una sola vez:
+            </p>
+            <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <KeyRound className="h-4 w-4 shrink-0 text-text-3" aria-hidden />
+              <span className="font-mono">{creada.email}</span>
+              <span className="text-text-3">/</span>
+              <span className="font-mono">{creada.password}</span>
+            </p>
+            <p className="mt-2 text-text-2">
+              Que entren por <span className="font-mono">/login</span>, cambien
+              la contraseña y sigan la guía de inicio. Para dejarles el bot
+              montado tú mismo, entra ahora:
+            </p>
+            <div className="mt-2">
+              <BotonGestion
+                organizationId={creada.organizationId}
+                nombre={creada.nombre}
               />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <Label htmlFor="nt-email">Correo del cliente</Label>
-              <Input
-                id="nt-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="dueno@negocio.com"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <Label htmlFor="nt-password">Contraseña inicial (opcional)</Label>
-              <Input
-                id="nt-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Si la dejas vacía, se genera una"
-              />
-            </label>
-          </div>
-
-          {error && <p className="mt-3 text-[13px] text-destructive">{error}</p>}
-
-          <div className="mt-4">
-            <Button onClick={crear} disabled={ocupado || nombre.trim().length < 2 || !email.trim()}>
-              {ocupado ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-              Crear tienda
-            </Button>
-          </div>
-
-          {creada && (
-            <div className="mt-4 rounded-lg border border-info-soft bg-info-tint p-3 text-[13px] text-info-text">
-              <p className="font-semibold text-foreground">
-                {creada.nombre} creada. Estos son los accesos del cliente, se
-                muestran una sola vez:
-              </p>
-              <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <KeyRound className="h-4 w-4 shrink-0 text-text-3" aria-hidden />
-                <span className="font-mono">{creada.email}</span>
-                <span className="text-text-3">/</span>
-                <span className="font-mono">{creada.password}</span>
-              </p>
-              <p className="mt-2 text-text-2">
-                Que entren por <span className="font-mono">/login</span>, cambien
-                la contraseña y sigan la guía de inicio. Para dejarles el bot
-                montado tú mismo, entra ahora:
-              </p>
-              <div className="mt-2">
-                <BotonGestion
-                  organizationId={creada.organizationId}
-                  nombre={creada.nombre}
-                />
-              </div>
             </div>
-          )}
-        </CardContent>
-      )}
+          </div>
+        )}
+      </CardContent>
     </Card>
   );
 }

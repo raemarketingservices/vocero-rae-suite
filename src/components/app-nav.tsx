@@ -137,7 +137,7 @@ export function AppNav({
         // color YA CALCULADO en <body> con el tema de la página, no el de
         // `.nav-dark` — y un texto oscuro sobre este fondo oscuro se pierde.
         "nav-dark fixed inset-y-0 left-0 z-50 flex w-[17rem] shrink-0 flex-col overflow-y-auto border-r bg-subtle px-3 pb-3.5 pt-4 text-foreground transition-[transform,visibility] duration-200",
-        "lg:static lg:visible lg:z-auto lg:w-56 lg:translate-x-0 lg:overflow-visible lg:transition-none",
+        "lg:static lg:visible lg:z-auto lg:w-64 lg:translate-x-0 lg:overflow-visible lg:transition-none",
         open ? "visible translate-x-0 shadow-pop" : "invisible -translate-x-full"
       )}
     >
@@ -153,7 +153,7 @@ export function AppNav({
           <X className="h-[18px] w-[18px]" strokeWidth={1.8} />
         </button>
         <div className="min-w-0">
-          <BrandLogo branding={branding} />
+          <BrandLogo branding={branding} multiline />
           <span className="kicker mt-2 block">CRM · WhatsApp</span>
         </div>
       </div>

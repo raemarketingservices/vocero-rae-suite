@@ -1,8 +1,10 @@
-import Link from "next/link";
+import { eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
-import { DEFAULT_BRANDING } from "@/lib/branding";
+import { getDb, schema } from "@/lib/db";
 import { hayAdminDePlataforma, sesionEsAdminPlataforma } from "@/lib/auth/platform";
-import { BrandMark } from "@/components/brand-mark";
+import { agendaEnabled } from "@/server/agenda/flag";
+import { getPlatformBranding } from "@/server/platform-branding";
+import { PanelShell } from "@/components/panel/panel-shell";
 
 /**
  * Cascarón del panel de la plataforma.
@@ -11,6 +13,10 @@ import { BrandMark } from "@/components/brand-mark";
  * (`notFound()`, el mismo 404 de las features apagadas); si lo declaró pero
  * quien entra no está en la lista, se le manda a su propia app sin explicarle
  * por qué.
+ *
+ * Lo que pinta es la marca de la PLATAFORMA (`platform_brand`), nunca la de una
+ * tienda: el panel es la consola de RAE, y verla con la marca del cliente que
+ * tocó hace poco sería confundir las dos superficies.
  */
 export default async function PanelLayout({
   children,
@@ -19,35 +25,23 @@ export default async function PanelLayout({
   const admin = await sesionEsAdminPlataforma();
   if (!admin) redirect("/");
 
+  const [marca, fila] = await Promise.all([
+    getPlatformBranding(),
+    getDb()
+      .select({ nombre: schema.user.name })
+      .from(schema.user)
+      .where(eq(schema.user.id, admin.userId))
+      .limit(1),
+  ]);
+
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
-      <header className="nav-dark flex shrink-0 items-center gap-3 border-b bg-subtle px-4 py-2.5">
-        <BrandMark className="h-7 w-7 shrink-0" />
-        <span className="truncate text-sm font-semibold text-foreground">
-          {DEFAULT_BRANDING.name} · Panel
-        </span>
-        <nav className="ml-2 flex items-center gap-1 text-[13px]">
-          <Link
-            href="/panel"
-            className="rounded-md px-2.5 py-1 font-medium text-text-2 hover:bg-accent hover:text-foreground"
-          >
-            Tiendas
-          </Link>
-          <Link
-            href="/panel/cuentas"
-            className="rounded-md px-2.5 py-1 font-medium text-text-2 hover:bg-accent hover:text-foreground"
-          >
-            Cuentas
-          </Link>
-        </nav>
-        <span className="ml-auto flex items-center gap-3 text-[12px] text-text-3">
-          <span className="hidden truncate sm:block">{admin.email}</span>
-          <Link href="/" className="underline underline-offset-2">
-            Mi tienda
-          </Link>
-        </span>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-    </div>
+    <PanelShell
+      marca={{ name: marca.name, accent: marca.accent, favicon: marca.favicon }}
+      nombre={fila[0]?.nombre ?? admin.email}
+      email={admin.email}
+      citas={agendaEnabled()}
+    >
+      {children}
+    </PanelShell>
   );
 }
