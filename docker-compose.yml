@@ -40,7 +40,10 @@ services:
       AGENT_COALESCE_MS: ${AGENT_COALESCE_MS:-6000}
       # Opcionales: vacías = apagadas (guía de cada una en .env.example).
       CHANNELS: ${CHANNELS:-}
-      AGENDA: ${AGENDA:-}
+      # En la suite RAE la agenda viene encendida: "Citas" es menú propio del
+      # CRM y entrada del panel, y apagarla dejaría ambas puertas en 404.
+      # `AGENDA=off` en el .env la apaga si una instancia no la quiere.
+      AGENDA: ${AGENDA:-on}
       ATRIBUCION: ${ATRIBUCION:-}
       BOT_API_KEY: ${BOT_API_KEY:-}
       BRAIN_HEALTH_URL: ${BRAIN_HEALTH_URL:-}

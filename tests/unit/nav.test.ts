@@ -26,15 +26,22 @@ describe("barra lateral agrupada", () => {
     ]);
   });
 
-  it("AGENDA añade Citas al final de Trabajo", () => {
-    const [trabajo] = appNavGroups({ agenda: true, role: "member" });
-    expect(trabajo!.items.map((i) => i.label)).toEqual([
+  it("AGENDA abre un grupo propio para Citas, sin robarle el puesto a Trabajo", () => {
+    const groups = appNavGroups({ agenda: true, role: "member" });
+    expect(groups[0]!.items.map((i) => i.label)).toEqual([
       "Bandeja",
       "Pipeline",
       "Contactos",
-      "Citas",
     ]);
-    expect(trabajo!.items.at(-1)!.href).toBe("/bookings");
+    expect(groups[1]!.title).toBeUndefined();
+    expect(groups[1]!.items).toEqual([
+      { href: "/bookings", label: "Citas", icon: expect.anything() },
+    ]);
+    expect(groups[2]!.title).toBe("Agente");
+    // Apagada la bandera, la entrada no existe: el enlace sería un 404.
+    expect(
+      appNavGroups({ agenda: false, role: "member" }).flatMap((g) => g.items)
+    ).not.toContainEqual(expect.objectContaining({ href: "/bookings" }));
   });
 
   it("la guía de inicio abre el grupo Agente solo para quien configura", () => {

@@ -69,9 +69,12 @@ export function appNavGroups({
     { href: "/pipeline", label: "Pipeline", icon: Kanban },
     { href: "/contacts", label: "Contactos", icon: Users },
   ];
-  // Citas va después de Contactos: es el paso siguiente de un trato, no una
-  // sección aparte.
-  if (agenda) trabajo.push({ href: "/bookings", label: "Citas", icon: CalendarDays });
+  // #100 — Citas es grupo aparte, no el paso siguiente de un trato: quien
+  // agenda mira su día, no la lista de contactos, y meterla al final de
+  // "Trabajo" la dejaba a la sombra de tres entradas más usadas.
+  const citas: NavItem[] = agenda
+    ? [{ href: "/bookings", label: "Citas", icon: CalendarDays }]
+    : [];
 
   const agente: NavItem[] = [];
   // Un miembro del equipo no puede hacer ninguno de los pasos de la guía.
@@ -85,6 +88,8 @@ export function appNavGroups({
 
   const grupos: NavGroup[] = [
     { title: "Trabajo", items: trabajo },
+    // Sin encabezado: es una sola entrada y su nombre ya dice todo.
+    ...(citas.length ? [{ items: citas }] : []),
     { title: "Agente", items: agente },
     // 019 — Se mide al final: primero se atiende y se organiza.
     { items: [{ href: "/results", label: "Resultados", icon: ChartColumn }] },
