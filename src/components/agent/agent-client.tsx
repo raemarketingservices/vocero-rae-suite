@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Cable, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Cable, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { BrainStatusCard } from "@/components/agent/brain-status-card";
 import {
   externalAnswerLabel,
@@ -97,6 +97,11 @@ export function AgentClient() {
     void refetch();
   }
 
+  async function restablecerAgente() {
+    await fetch("/api/agent/profile/reset", { method: "POST" }).catch(() => null);
+    void refetch();
+  }
+
   // Sin token de IA, este aviso pedía configurarlo aunque contestara un
   // cerebro externo, y eso mentía. Con uno contestando, se dice eso; con uno
   // caído, ya lo dice la tarjeta de arriba.
@@ -171,7 +176,11 @@ export function AgentClient() {
       )}
 
       <div className="grid gap-4 p-4 sm:gap-6 sm:p-6 lg:grid-cols-2">
-        <ProfileSection profile={profile} onSave={saveProfile} />
+        <ProfileSection
+          profile={profile}
+          onSave={saveProfile}
+          onRestablecer={restablecerAgente}
+        />
         <KbSection entries={entries} kbSize={kbSize} onChanged={() => void refetch()} />
       </div>
     </div>
@@ -181,11 +190,16 @@ export function AgentClient() {
 function ProfileSection({
   profile,
   onSave,
+  onRestablecer,
 }: {
   profile: Profile;
   onSave: (patch: Partial<Profile>) => Promise<void>;
+  onRestablecer: () => Promise<void>;
 }) {
   const [form, setForm] = useState(profile);
+  // El restablecimiento se confirma en dos clics: es destructivo y no hay
+  // diálogo en la librería de UI.
+  const [confirmando, setConfirmando] = useState(false);
   useEffect(() => setForm(profile), [profile]);
 
   return (
@@ -243,7 +257,41 @@ function ProfileSection({
             onChange={(e) => setForm({ ...form, greeting: e.target.value })}
           />
         </div>
-        <Button onClick={() => void onSave(form)}>Guardar comportamiento</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => void onSave(form)}>Guardar comportamiento</Button>
+          {confirmando ? (
+            <>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  setConfirmando(false);
+                  void onRestablecer();
+                }}
+              >
+                <RotateCcw className="h-4 w-4" /> Sí, restablecer
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmando(false)}>
+                Cancelar
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmando(true)}
+            >
+              <RotateCcw className="h-4 w-4" /> Restablecer agente
+            </Button>
+          )}
+        </div>
+        {confirmando && (
+          <p className="text-xs text-text-2">
+            Se apaga el agente y quedan en blanco el nombre, el tono, las
+            instrucciones, las reglas de escalado y el saludo. El conocimiento
+            y el canal conectado no se tocan.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
