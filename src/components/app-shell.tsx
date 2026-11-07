@@ -8,6 +8,7 @@ import type { ThemePreference } from "@/lib/theme";
 import type { ResolvedCommit } from "@/lib/version";
 import { AppNav } from "@/components/app-nav";
 import { BrandLogo } from "@/components/brand-mark";
+import { appNavGroups, isNavActive, SETTINGS_ITEM } from "@/lib/nav";
 
 /**
  * Cascarón de la app en dos modos:
@@ -71,8 +72,12 @@ export function AppShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [navOpen]);
 
+  // Breadcrumb del topbar: la misma entrada que el menú marca como activa.
+  const section = [...appNavGroups({ agenda, role, panel }).flatMap((g) => g.items), SETTINGS_ITEM]
+    .find((item) => isNavActive(pathname, item.href))?.label;
+
   return (
-    <div className="flex h-dvh overflow-hidden bg-background">
+    <div className="flex h-dvh overflow-hidden bg-subtle">
       {navOpen && (
         <button
           aria-label="Cerrar el menú"
@@ -95,9 +100,9 @@ export function AppShell({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Misma pieza que la barra lateral (`nav-dark`): en el teléfono la
-            franja azul marino de arriba es lo que queda del bicolor. */}
-        <header className="nav-dark flex h-12 shrink-0 items-center gap-1.5 border-b bg-subtle px-2 text-foreground lg:hidden">
+        {/* Topbar blanco: en el teléfono lleva el hamburguesa y la marca; en
+            escritorio, el breadcrumb de la sección. */}
+        <header className="flex h-12 shrink-0 items-center gap-1.5 border-b bg-background px-2 text-foreground lg:hidden">
           <button
             onClick={() => setNavOpen(true)}
             aria-label="Abrir el menú"
@@ -109,9 +114,26 @@ export function AppShell({
           <BrandLogo branding={branding} className="min-w-0" />
         </header>
 
+        <header className="hidden h-16 shrink-0 items-center border-b bg-background px-8 lg:flex">
+          <p className="text-[12px] text-text-3">
+            Workspace
+            {section && (
+              <>
+                {" / "}
+                <b className="font-semibold text-foreground">{section}</b>
+              </>
+            )}
+          </p>
+        </header>
+
         {aviso}
 
-        <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</main>
+        {/* El contenido flota como tarjeta sobre el gris de la página. */}
+        <main className="min-h-0 min-w-0 flex-1 overflow-hidden lg:p-6">
+          <div className="h-full min-h-0 overflow-hidden bg-background lg:rounded-[14px] lg:border">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   );

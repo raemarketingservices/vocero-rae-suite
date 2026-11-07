@@ -40,10 +40,11 @@
     /* 215 — Lo no hábil del calendario de Citas (ver .cal-off). */
     --cal-off: #f2f4f8;
 
-    /* Chat: el cliente entra en verde WhatsApp, el CRM contesta en el acento */
-    --chat-bg: #f2f4f8;
-    --bubble-in: #eaf7ef;
-    --bubble-in-border: #d7eede;
+    /* Chat: el cliente entra en blanco; el CRM contesta en azul marino
+       (la burbuja saliente usa `.nav-dark`, ver message-thread.tsx) */
+    --chat-bg: #f8faff;
+    --bubble-in: #ffffff;
+    --bubble-in-border: #e4e9f2;
     --bubble-out: var(--accent-tint);
     --bubble-out-border: var(--accent-soft);
     --bubble-out-text: var(--text);
@@ -138,8 +139,8 @@
 
     /* Chat */
     --chat-bg: #141c30;
-    --bubble-in: #173d2c;
-    --bubble-in-border: #2a5e45;
+    --bubble-in: #203454;
+    --bubble-in-border: #354e73;
 
     /* Acento: respaldo con el azul RAE calculado para este fondo; el
        white-label lo recalcula (ver resolveAccentSet en lib/branding). */

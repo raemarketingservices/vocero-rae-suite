@@ -225,12 +225,13 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
                 className={cn(
                   // En el teléfono la burbuja necesita casi todo el renglón:
                   // con 64% cada mensaje se parte en tres líneas.
-                  // Burbujas del mockup de la landing: el cliente entra en
-                  // verde WhatsApp, el CRM contesta con el lavado del acento.
+                  // El CRM contesta en azul marino (`nav-dark` redeclara los
+                  // neutros, así hora, palomitas e "IA" siguen legibles); el
+                  // cliente entra en blanco con borde.
                   "max-w-[85%] rounded-[14px] border px-3 pb-1.5 pt-2 text-[13.5px] leading-[1.45] shadow-sm sm:max-w-[64%]",
                   out
-                    ? "border-bubble-out-border bg-bubble-out text-bubble-out-text"
-                    : "border-bubble-in-border bg-bubble-in",
+                    ? "nav-dark border-transparent bg-background text-foreground"
+                    : "border-bubble-in-border bg-bubble-in font-semibold",
                   !grouped && (out ? "rounded-tr-[5px]" : "rounded-tl-[5px]")
                 )}
               >

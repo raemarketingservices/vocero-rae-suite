@@ -557,7 +557,7 @@ function CreateForm({
           <div className="space-y-1.5">
             <p className="text-sm font-medium">Así lo verá tu cliente</p>
             <div className="rounded-lg bg-chat p-4">
-              <div className="ml-auto max-w-[85%] rounded-lg border border-bubble-out-border bg-bubble-out px-3 py-2 text-sm text-bubble-out-text shadow-sm">
+              <div className="ml-auto max-w-[85%] nav-dark rounded-lg border border-transparent bg-background px-3 py-2 text-sm text-foreground shadow-sm">
                 <p className="whitespace-pre-wrap">{preview}</p>
                 <p className="mt-1 text-right text-[10px] opacity-60">10:30</p>
               </div>
