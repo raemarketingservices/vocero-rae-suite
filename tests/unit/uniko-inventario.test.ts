@@ -18,7 +18,10 @@ import {
 } from "@/server/uniko/config";
 import {
   bloqueDeExistencias,
+  bloqueDeTienda,
   buscarExistencias,
+  esDuenoDeTienda,
+  perfilDeTienda,
   type Existencia,
 } from "@/server/uniko/inventario";
 
@@ -139,7 +142,7 @@ describe("leerConfigUniko: la bandera de catálogo", () => {
 });
 
 describe("buscarExistencias: las guardas antes de tocar la red", () => {
-  it("sin config, sin tienda o sin texto: cero llamadas", async () => {
+  it("sin config o sin tienda: cero llamadas", async () => {
     expect(await buscarExistencias("store_1", "tenis", APAGADO)).toEqual({
       ok: false,
       motivo: "sin_config",
@@ -152,13 +155,44 @@ describe("buscarExistencias: las guardas antes de tocar la red", () => {
         motivo: "sin_config",
       });
     }
-    for (const texto of [null, undefined, "   "]) {
-      expect(await buscarExistencias("store_1", texto, config)).toEqual({
-        ok: false,
-        motivo: "sin_texto",
-      });
-    }
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sin texto pide una muestra del catálogo (consulta vacía)", async () => {
+    fetchMock.mockResolvedValueOnce(json({ products: [filaRpc()] }));
+    const r = await buscarExistencias("store_1", "   ", conSoloEntorno({}));
+    expect(r).toEqual({ ok: true, productos: [existencia()] });
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body as string).p_query).toBe("");
+  });
+
+  it("esDuenoDeTienda: sí, no, o error si el RPC falta o responde raro", async () => {
+    const config = conSoloEntorno({});
+    fetchMock.mockResolvedValueOnce(json(true));
+    expect(await esDuenoDeTienda("tech-rd", "a@b.do", config)).toBe(true);
+    expect(String(fetchMock.mock.calls[0]![0])).toContain("/rest/v1/rpc/crm_store_owner_matches");
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body as string)).toEqual({
+      p_store_id: "tech-rd",
+      p_email: "a@b.do",
+    });
+    fetchMock.mockResolvedValueOnce(json(false));
+    expect(await esDuenoDeTienda("tech-rd", "otro@b.do", config)).toBe(false);
+    fetchMock.mockResolvedValueOnce(json({ message: "not found" }, 404));
+    expect(await esDuenoDeTienda("tech-rd", "a@b.do", config)).toBe("error");
+    fetchMock.mockResolvedValueOnce(json(null));
+    expect(await esDuenoDeTienda("tech-rd", "a@b.do", config)).toBe("error");
+  });
+
+  it("perfilDeTienda: fila, ausente (RLS) o error", async () => {
+    const config = conSoloEntorno({});
+    fetchMock.mockResolvedValueOnce(json([{ id: "tech-rd", name: "Tech RD", verified: true }]));
+    const perfil = await perfilDeTienda("tech-rd", config);
+    expect(String(fetchMock.mock.calls[0]![0])).toContain("/rest/v1/stores?id=eq.tech-rd");
+    expect(bloqueDeTienda(perfil, config)).toContain("https://uniko-rd.com/tiendas/tech-rd");
+    fetchMock.mockResolvedValueOnce(json([]));
+    expect(await perfilDeTienda("x", config)).toBeNull();
+    fetchMock.mockResolvedValueOnce(json({}, 500));
+    expect(await perfilDeTienda("x", config)).toBe("error");
+    expect(bloqueDeTienda("error", config)).toBeNull();
   });
 
   it("manda la tienda, la consulta y el límite, firmada con la anon", async () => {

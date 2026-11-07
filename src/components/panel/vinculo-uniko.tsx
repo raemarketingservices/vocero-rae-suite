@@ -19,9 +19,12 @@ import { Input } from "@/components/ui/input";
 export function VinculoUniko({
   organizationId,
   storeId,
+  endpoint = "/api/panel/vinculo",
 }: {
   organizationId: string;
   storeId: string | null;
+  /** El panel (admin) o Ajustes (el dueño de la tienda, `/api/settings/uniko`). */
+  endpoint?: string;
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
@@ -32,7 +35,7 @@ export function VinculoUniko({
   async function guardar(storeIdNuevo: string | null) {
     setOcupado(true);
     setError(null);
-    const res = await fetch("/api/panel/vinculo", {
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ organizationId, storeId: storeIdNuevo }),
@@ -81,9 +84,9 @@ export function VinculoUniko({
       {abierto && (
         <div className="mt-2">
           <p className="text-[11.5px] text-text-3">
-            El <code>store_id</code> de la tabla <code>stores</code> de UNIKO-RD
-            (es un slug, no un UUID). Mientras esté vacío, el bot no pregunta
-            existencias y usa solo el knowledge base.
+            Tu Store ID de UNIKO-RD: lo ves en uniko-rd.com → Vender, con tu
+            cuenta de vendedor. Con él, el bot responde sobre los productos,
+            precios, existencias y el perfil de tu tienda.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Input

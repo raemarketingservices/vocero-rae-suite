@@ -24,7 +24,7 @@ export type ProblemaUniko =
   | "sin_llave";
 
 export type ConfigUniko =
-  | { active: true; rpcUrl: string; anonKey: string; webBase: string }
+  | { active: true; rpcUrl: string; storesUrl: string; duenoUrl: string; anonKey: string; webBase: string }
   | { active: false; problem: ProblemaUniko | null };
 
 type Entorno = Record<string, string | undefined>;
@@ -57,6 +57,8 @@ export function leerConfigUniko(env: Entorno = process.env): ConfigUniko {
     // PostgREST: un RPC se llama por POST a esta ruta del proyecto. Se conserva
     // el path si el Supabase está detrás de un proxy con prefijo.
     rpcUrl: `${sinBarra}/rest/v1/rpc/crm_search_products`,
+    storesUrl: `${sinBarra}/rest/v1/stores`,
+    duenoUrl: `${sinBarra}/rest/v1/rpc/crm_store_owner_matches`,
     anonKey,
     webBase: (web ?? UNIKO_WEB_POR_DEFECTO).replace(/\/+$/, ""),
   };
