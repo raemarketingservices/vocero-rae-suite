@@ -5,6 +5,7 @@ import { canConfigure } from "@/lib/auth/roles";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { guideStatus } from "@/server/onboarding/guide";
+import { getBranding } from "@/server/branding";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,9 @@ export default async function OnboardingPage() {
   const session = await getSessionOrNull();
   if (!session) redirect("/login");
   if (!canConfigure(session.role)) redirect("/inbox");
-  const [guide, [profile]] = await Promise.all([
+  const [guide, branding, [profile]] = await Promise.all([
     guideStatus(session.organizationId),
+    getBranding(session.organizationId),
     getDb()
       .select({ name: schema.agentProfile.name })
       .from(schema.agentProfile)
@@ -25,6 +27,11 @@ export default async function OnboardingPage() {
       .limit(1),
   ]);
   return (
-    <OnboardingClient guide={guide} agentName={profile?.name?.trim() || null} />
+    <OnboardingClient
+      guide={guide}
+      agentName={profile?.name?.trim() || null}
+      // La marca solo la cambia el propietario (ver PUT /api/settings/branding).
+      branding={session.role === "owner" ? branding : null}
+    />
   );
 }

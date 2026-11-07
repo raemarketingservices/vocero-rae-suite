@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { listarTiendas, type ResumenTienda } from "@/server/platform/resumen";
 import { BotonGestion } from "@/components/panel/boton-gestion";
+import { EliminarTienda } from "@/components/panel/eliminar-tienda";
 
 export const dynamic = "force-dynamic";
 
@@ -201,6 +202,15 @@ function Detalle({ t }: { t: ResumenTienda }) {
         </Link>
         .
       </p>
+
+      <section className="mt-8 rounded-xl border border-danger-soft bg-danger-tint p-5">
+        <h2 className="text-[14px] font-bold text-danger-text">Zona peligrosa</h2>
+        <p className="mb-4 mt-1 text-[13px] text-text-2">
+          Eliminar la tienda borra para siempre sus datos y las cuentas que no
+          pertenezcan a otra tienda.
+        </p>
+        <EliminarTienda organizationId={t.organizationId} nombre={t.nombre} />
+      </section>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { cache } from "react";
 import { getDb, schema } from "@/lib/db";
 import { getSessionOrNull } from "@/lib/auth/session";
 import {
+  DEFAULT_BRANDING,
   normalizeBranding,
   type Branding,
 } from "@/lib/branding";
@@ -40,17 +41,28 @@ export async function getBrandingContext(
   if (!organizationId) return await getPlatformBrandingContext();
   const db = getDb();
   const rows = await db
-    .select({ id: schema.organization.id, metadata: schema.organization.metadata })
+    .select({
+      id: schema.organization.id,
+      name: schema.organization.name,
+      metadata: schema.organization.metadata,
+    })
     .from(schema.organization)
     .where(eq(schema.organization.id, organizationId))
     .limit(1);
   if (!rows[0]) return await getPlatformBrandingContext();
   const meta = parseMetadata(rows[0].metadata);
+  const guardada = (meta.branding as Partial<Branding> | undefined) ?? null;
+  // Una tienda se llama como ella, no como la plataforma: el nombre por
+  // defecto ("RAE Marketing Services") es de la marca principal, así que sin
+  // nombre propio guardado —o con el de la plataforma guardado de rebote— se
+  // usa el nombre real de la organización.
+  const name =
+    guardada?.name?.trim() && guardada.name.trim() !== DEFAULT_BRANDING.name
+      ? guardada.name
+      : rows[0].name;
   return {
     organizationId: rows[0].id,
-    branding: normalizeBranding(
-      (meta.branding as Partial<Branding> | undefined) ?? null
-    ),
+    branding: normalizeBranding({ ...guardada, name }),
   };
 }
 

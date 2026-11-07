@@ -11,6 +11,7 @@ const guideFirst = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/auth/session", () => ({ getSessionOrNull }));
 vi.mock("@/server/onboarding/guide", () => ({ guideStatus, guideFirst }));
+vi.mock("@/server/branding", () => ({ getBranding: async () => null }));
 vi.mock("@/components/onboarding/onboarding-client", () => ({
   OnboardingClient: () => null,
 }));

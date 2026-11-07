@@ -7,6 +7,63 @@ import { ArrowRight, Check, Power } from "lucide-react";
 import type { Guide } from "@/server/onboarding/guide";
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
+import type { Branding } from "@/lib/branding";
+import { FaviconCard } from "@/components/settings/favicon-card";
+
+/**
+ * Lo primero de una cuenta nueva: su logo. Al subirlo, el acento de la
+ * interfaz se hereda del color dominante del logo y se GUARDA en el acto, así
+ * el CRM ya se ve con su marca sin pasar por Configuración → Marca.
+ */
+function MarcaInicial({ branding }: { branding: Branding }) {
+  const router = useRouter();
+  const [aviso, setAviso] = useState("");
+
+  async function heredar(hex: string | null) {
+    if (!hex) {
+      setAviso(
+        "Tu logo no tiene un color reconocible (es gris o SVG): elige el color en Configuración → Marca."
+      );
+      router.refresh();
+      return;
+    }
+    const res = await fetch("/api/settings/branding", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: branding.name,
+        accent: hex,
+        currency: branding.currency,
+        description: branding.description,
+      }),
+    }).catch(() => null);
+    setAviso(
+      res?.ok
+        ? `Listo: la interfaz ahora usa ${hex}, el color de tu logo.`
+        : "Se subió el logo, pero no pudimos aplicar su color. Hazlo en Configuración → Marca."
+    );
+    router.refresh();
+  }
+
+  return (
+    <section className="space-y-2">
+      <FaviconCard
+        branding={branding}
+        onColorExtraido={(hex) => void heredar(hex)}
+        titulo="Tu logo y tus colores"
+        ayuda="Súbelo y el CRM toma su color principal para los botones, el menú y los acentos."
+      />
+      {aviso && (
+        <p role="status" className="text-sm text-text-2">
+          {aviso}
+        </p>
+      )}
+      <Link href="/settings/branding" className="text-sm text-brand-ink underline underline-offset-2">
+        Ajustar nombre y color a mano
+      </Link>
+    </section>
+  );
+}
 
 /**
  * La primera pantalla (issue #86): los pasos con su avance y, al final, el
@@ -16,9 +73,12 @@ import { Button, buttonVariants } from "@/components/ui/button";
 export function OnboardingClient({
   guide,
   agentName,
+  branding = null,
 }: {
   guide: Guide;
   agentName: string | null;
+  /** Solo para el propietario: es quien puede cambiar la marca. */
+  branding?: Branding | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -68,6 +128,8 @@ export function OnboardingClient({
             volver aquí verás tu avance.
           </p>
         </header>
+
+        {branding && <MarcaInicial branding={branding} />}
 
         <div aria-label="Avance">
           <div className="flex items-center justify-between text-sm">

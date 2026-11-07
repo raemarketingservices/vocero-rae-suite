@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { apiError, parseBody, withPanel } from "@/lib/api";
-import { CorreoEnUso, crearTienda } from "@/server/platform/tiendas";
+import { cookies } from "next/headers";
+import { COOKIE_GESTION } from "@/lib/auth/platform";
+import {
+  CorreoEnUso,
+  TiendaPropia,
+  crearTienda,
+  eliminarTienda,
+} from "@/server/platform/tiendas";
 
 export const dynamic = "force-dynamic";
 
@@ -31,4 +38,25 @@ export const POST = withPanel(async (_admin, req: Request) => {
     if (err instanceof CorreoEnUso) return apiError(422, "email_en_uso", err.message);
     throw err;
   }
+});
+
+const baja = z.object({ organizationId: z.string().min(1) });
+
+/** Eliminar una tienda con todos sus datos. Irreversible: la UI pide escribir el nombre. */
+export const DELETE = withPanel(async (admin, req: Request) => {
+  const parsed = await parseBody(req, baja);
+  if (!parsed.ok) return parsed.response;
+  const { organizationId } = parsed.data;
+  try {
+    if (!(await eliminarTienda(organizationId, admin.userId))) {
+      return apiError(404, "not_found", "Esa tienda no existe en la instancia");
+    }
+  } catch (err) {
+    if (err instanceof TiendaPropia) return apiError(409, "tienda_propia", err.message);
+    throw err;
+  }
+  // Si el admin estaba gestionando esa tienda, la cookie ya no apunta a nada.
+  const jar = await cookies();
+  if (jar.get(COOKIE_GESTION)?.value === organizationId) jar.delete(COOKIE_GESTION);
+  return Response.json({ ok: true });
 });
