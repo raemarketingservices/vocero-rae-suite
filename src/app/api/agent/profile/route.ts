@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
@@ -24,6 +25,7 @@ export const GET = withAuth(async (session) => {
       instructions: p.instructions,
       escalationRules: p.escalationRules,
       greeting: p.greeting,
+      soloNuevos: p.soloNuevosDesde !== null,
     },
     aiConfigured: estado.activa,
     // Por qué no (sin configurar, llave rechazada, sin saldo): la pantalla
@@ -39,16 +41,28 @@ const putSchema = z.object({
   instructions: z.string().max(8000).nullable().optional(),
   escalationRules: z.string().max(4000).nullable().optional(),
   greeting: z.string().max(1000).nullable().optional(),
+  soloNuevos: z.boolean().optional(),
 });
 
 export const PUT = withAuth(async (session, req: Request) => {
   const body = await parseBody(req, putSchema);
   if (!body.ok) return body.response;
 
+  const { soloNuevos, ...resto } = body.data;
   const db = getDb();
   const updated = await db
     .update(schema.agentProfile)
-    .set({ ...body.data, updatedAt: new Date() })
+    .set({
+      ...resto,
+      // Encender fija el corte en este instante; apagar lo borra. Volver a
+      // guardar encendido NO lo mueve: si no, cada «Guardar» corría el corte.
+      ...(soloNuevos === undefined
+        ? {}
+        : soloNuevos
+          ? { soloNuevosDesde: sql`coalesce(${schema.agentProfile.soloNuevosDesde}, now())` }
+          : { soloNuevosDesde: null }),
+      updatedAt: new Date(),
+    })
     .where(scoped(schema.agentProfile.organizationId, session.organizationId))
     .returning();
   if (!updated[0]) return apiError(404, "not_found", "Perfil no encontrado");

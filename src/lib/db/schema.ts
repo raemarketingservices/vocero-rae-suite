@@ -408,6 +408,7 @@ export const conversation = pgTable(
         "ventana",
         "hostilidad",
         "manual_reply",
+        "contacto_conocido",
       ],
     }),
     lastInboundAt: timestamp("last_inbound_at"),
@@ -724,6 +725,9 @@ export const agentProfile = pgTable(
     instructions: text("instructions"),
     escalationRules: text("escalation_rules"),
     greeting: text("greeting"),
+    // 023: «Solo contactos nuevos». null = apagado; con fecha, quien ya tenía
+    // chat antes de ese momento entra en atención humana.
+    soloNuevosDesde: timestamp("solo_nuevos_desde"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

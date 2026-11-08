@@ -441,7 +441,7 @@ export async function ingestInboundMessage(input: {
   const db = getDb();
   const { organizationId } = input;
 
-  const { contact } = await getOrCreateContactByIdentity(
+  const { contact, isNew } = await getOrCreateContactByIdentity(
     organizationId,
     input.identity
   );
@@ -496,6 +496,28 @@ export async function ingestInboundMessage(input: {
   const message = inserted[0];
   if (!message) return; // duplicado
 
+  // 023 — «Solo contactos nuevos»: el primer mensaje de un chat de alguien que
+  // ya le escribía al negocio no lo toma el bot; entra en atención humana.
+  if (!conversation.lastInboundAt) {
+    const perfil = await db
+      .select({ desde: schema.agentProfile.soloNuevosDesde })
+      .from(schema.agentProfile)
+      .where(eq(schema.agentProfile.organizationId, organizationId))
+      .limit(1);
+    if (
+      esContactoConocido({
+        contactoNuevo: isNew,
+        threadRef: input.threadRef ?? null,
+        desde: perfil[0]?.desde ?? null,
+      })
+    ) {
+      await db
+        .update(schema.conversation)
+        .set({ aiEnabled: false, handoffAt: new Date(), handoffReason: "contacto_conocido" })
+        .where(eq(schema.conversation.id, conversation.id));
+    }
+  }
+
   const asset = input.media
     ? await attachMediaAsset(organizationId, message.id, input.media)
     : null;
@@ -525,6 +547,26 @@ export async function ingestInboundMessage(input: {
   });
 
   await maybeRunAgentTurn(conversation.id, organizationId);
+}
+
+/**
+ * ¿Este chat es de alguien que ya le escribía al negocio antes de encender
+ * «Solo contactos nuevos» (`desde`)? Lo es si el contacto ya estaba en el CRM,
+ * o si su hilo de Zernio es anterior: al conectar el número, Zernio trae el
+ * historial y crea esos hilos en ese momento.
+ */
+export function esContactoConocido(input: {
+  contactoNuevo: boolean;
+  threadRef: string | null;
+  desde: Date | null;
+}): boolean {
+  if (!input.desde) return false;
+  if (!input.contactoNuevo) return true;
+  // ponytail: la fecha sale de los primeros 8 hex del id de Zernio (ObjectId);
+  // si Zernio cambia el formato, el chat cuenta como nuevo y lo toma el bot.
+  const id = input.threadRef ?? "";
+  if (!/^[0-9a-f]{24}$/i.test(id)) return false;
+  return parseInt(id.slice(0, 8), 16) * 1000 < input.desde.getTime();
 }
 
 /**

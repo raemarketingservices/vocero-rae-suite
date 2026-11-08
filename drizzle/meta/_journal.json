@@ -162,6 +162,13 @@
       "when": 1793868302369,
       "tag": "0022_marca_plataforma",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794102498713,
+      "tag": "0023_solo_contactos_nuevos",
+      "breakpoints": true
     }
   ]
 }

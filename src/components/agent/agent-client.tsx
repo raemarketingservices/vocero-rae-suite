@@ -25,6 +25,7 @@ type Profile = {
   instructions: string | null;
   escalationRules: string | null;
   greeting: string | null;
+  soloNuevos: boolean;
 };
 
 type KbEntry = {
@@ -136,6 +137,22 @@ export function AgentClient() {
           />
         </div>
       </header>
+
+      <div className="mx-4 mt-4 flex items-start justify-between gap-4 rounded-lg border p-4 sm:mx-6 sm:mt-6">
+        <div>
+          <p className="text-sm font-medium">Solo contactos nuevos</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Quien ya te escribía antes de encender esto entra en «Atención
+            humana» y lo atiendes tú. Puedes activar el bot en ese chat desde la
+            Bandeja.
+          </p>
+        </div>
+        <Switch
+          checked={profile.soloNuevos}
+          label="Solo contactos nuevos"
+          onCheckedChange={(soloNuevos) => void saveProfile({ soloNuevos })}
+        />
+      </div>
 
       {brain && (
         <div className="mx-4 mt-4 sm:mx-6 sm:mt-6">
