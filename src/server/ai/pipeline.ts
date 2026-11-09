@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
@@ -15,7 +15,14 @@ import {
   resolveStage,
   type AgentActionType,
 } from "@/server/ai/actions";
-import { HANDOFF_BACKUP_ACK, matchesHandoffIntent } from "@/server/ai/handoff";
+import {
+  HANDOFF_BACKUP_ACK,
+  matchesHandoffIntent,
+  OFERTA_BOTONES,
+  OFERTA_HUMANO,
+  OFERTA_NO_ACK,
+  respuestaAOferta,
+} from "@/server/ai/handoff";
 import { buildAgentSystemPrompt } from "@/server/ai/prompts";
 import { agendaEnabled } from "@/server/agenda/flag";
 import { bookSlot, offerSlots } from "@/server/agenda/agent";
@@ -149,6 +156,22 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     await acknowledgeHandoff(conversation);
     await applyHandoff(conversationId, organizationId, "cliente");
     return;
+  }
+
+  // Sí/No a la oferta de hablar con una persona. Sin modelo: no gasta cupo y
+  // funciona aunque el proveedor de IA esté caído.
+  const ultimoSaliente = [...history].reverse().find((m) => m.direction === "out");
+  if (ultimoSaliente?.text === OFERTA_HUMANO) {
+    const respuesta = respuestaAOferta(lastInbound.text);
+    if (respuesta === "si") {
+      await acknowledgeHandoff(conversation);
+      await applyHandoff(conversationId, organizationId, "cliente");
+      return;
+    }
+    if (respuesta === "no") {
+      await deliverReply(conversation, OFERTA_NO_ACK);
+      return;
+    }
   }
 
   const kb = await db
@@ -291,6 +314,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       return;
     case "reply":
       await deliverReply(conversation, action.text);
+      await ofrecerHumano(conversation);
       return;
     case "update_lead": {
       await appendLeadNote(organizationId, conversation.contactId, action.note);
@@ -357,6 +381,40 @@ async function acknowledgeHandoff(conversation: Conversation): Promise<void> {
       `[agente] el acuse del traspaso no salió en ${conversation.id}; se traspasa igual:`,
       err
     );
+  }
+}
+
+/**
+ * Ofrece hablar con una persona, una sola vez por chat. Si falla no pasa nada:
+ * la respuesta del bot ya salió y se reintenta en la siguiente.
+ */
+async function ofrecerHumano(conversation: Conversation): Promise<void> {
+  try {
+    const ya = await getDb()
+      .select({ id: schema.message.id })
+      .from(schema.message)
+      .where(
+        and(
+          eq(schema.message.conversationId, conversation.id),
+          eq(schema.message.text, OFERTA_HUMANO)
+        )
+      )
+      .limit(1);
+    if (ya[0]) return;
+    if (conversation.isTest) {
+      await persistTestOutbound(conversation, OFERTA_HUMANO);
+      return;
+    }
+    const oferta = {
+      conversationId: conversation.id,
+      organizationId: conversation.organizationId,
+      text: OFERTA_HUMANO,
+      aiGenerated: true,
+    };
+    // Si la plataforma rechaza los botones, el texto ya pide «Sí o No».
+    await sendText({ ...oferta, botones: OFERTA_BOTONES }).catch(() => sendText(oferta));
+  } catch (err) {
+    console.error(`[agente] la oferta de humano no salió en ${conversation.id}:`, err);
   }
 }
 

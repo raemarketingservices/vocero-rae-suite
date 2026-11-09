@@ -1,5 +1,9 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { HANDOFF_BACKUP_ACK } from "@/server/ai/handoff";
+import {
+  HANDOFF_BACKUP_ACK,
+  OFERTA_HUMANO,
+  OFERTA_NO_ACK,
+} from "@/server/ai/handoff";
 
 /**
  * FR-022 — Cuando el patrón de respaldo detecta que el cliente pide una
@@ -275,5 +279,74 @@ describe("acuse del patrón de respaldo antes de traspasar (FR-022)", () => {
       aiGenerated: true,
     });
     expect(eventos).toEqual(["enviado:Te paso con el equipo.", "handoff:modelo"]);
+  });
+});
+
+describe("oferta de hablar con una persona", () => {
+  /** El historial se pide del más nuevo al más viejo. */
+  function trasOferta(text: string) {
+    selectQueue.push([conversacion()], [perfil], [
+      { id: "msg_2", direction: "in", text, createdAt: new Date() },
+      { id: "msg_1", direction: "out", text: OFERTA_HUMANO, createdAt: new Date() },
+    ]);
+  }
+
+  beforeAll(async () => {
+    ({ runAgentTurn } = await import("@/server/ai/pipeline"));
+  }, 60_000);
+
+  beforeEach(() => {
+    eventos.length = 0;
+    selectQueue.length = 0;
+    sendText.mockReset();
+    sendText.mockImplementation(async (input: { text: string }) => {
+      eventos.push(`enviado:${input.text}`);
+      return { messageId: "msg_out" };
+    });
+    chatJson.mockReset();
+    vi.stubEnv("OPENROUTER_API_TOKEN", "token-test");
+  });
+
+  it("Sí: avisa y traspasa, sin gastar modelo", async () => {
+    trasOferta("Sí");
+    await correrTurno();
+    expect(eventos).toEqual([`enviado:${HANDOFF_BACKUP_ACK}`, "handoff:cliente"]);
+    expect(chatJson).not.toHaveBeenCalled();
+  });
+
+  it("No: el bot sigue, sin traspaso y sin gastar modelo", async () => {
+    trasOferta("No");
+    await correrTurno();
+    expect(eventos).toEqual([`enviado:${OFERTA_NO_ACK}`]);
+    expect(chatJson).not.toHaveBeenCalled();
+  });
+
+  it("tras la primera respuesta del bot sale la oferta con botones", async () => {
+    turno("hola");
+    chatJson.mockResolvedValue({ ok: true, data: { action: "reply", text: "Hola" } });
+    await correrTurno();
+    expect(eventos).toEqual(["enviado:Hola", `enviado:${OFERTA_HUMANO}`]);
+    expect(sendText).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: OFERTA_HUMANO, botones: ["Sí", "No"] })
+    );
+  });
+
+  it("si rechazan los botones, la oferta sale como texto", async () => {
+    turno("hola");
+    chatJson.mockResolvedValue({ ok: true, data: { action: "reply", text: "Hola" } });
+    sendText.mockImplementation(async (input: { text: string; botones?: string[] }) => {
+      if (input.botones) throw new Error("400");
+      eventos.push(`enviado:${input.text}`);
+      return { messageId: "msg_out" };
+    });
+    await correrTurno();
+    expect(eventos).toEqual(["enviado:Hola", `enviado:${OFERTA_HUMANO}`]);
+  });
+
+  it("no se repite si el chat ya la tiene", async () => {
+    selectQueue.push([conversacion()], [perfil], historial("hola"), [], [], [{ id: "msg_x" }]);
+    chatJson.mockResolvedValue({ ok: true, data: { action: "reply", text: "Hola" } });
+    await correrTurno();
+    expect(eventos).toEqual(["enviado:Hola"]);
   });
 });

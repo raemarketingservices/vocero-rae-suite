@@ -118,10 +118,11 @@ export function normalizeZernioWhatsappEvent(
     profileName: resolved.profileName ?? nombre,
   };
 
+  // El toque de un botón puede llegar sin texto, solo con su `interactiveId`.
   const texto =
     typeof evt.message?.text === "string" && evt.message.text.length > 0
       ? evt.message.text
-      : null;
+      : evt.message?.metadata?.interactiveId || null;
 
   const adjunto = evt.message?.attachments?.[0];
   const tipoAdjunto = adjunto?.type ? ADJUNTO[adjunto.type] ?? null : null;

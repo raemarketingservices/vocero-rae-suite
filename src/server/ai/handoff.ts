@@ -5,7 +5,7 @@
  * objeto humano — "somos 4 personas" NO matchea (test unitario).
  */
 export const HANDOFF_BACKUP_REGEX =
-  /(hablar|comunicar|contactar)[\s\S]{0,40}?(asesor|humano|persona|alguien)|un asesor|atenci[oó]n humana/i;
+  /(hablar|comunicar|contactar)[\s\S]{0,40}?(asesor|humano|persona|alguien)|un asesor|un humano|p[aá]s[ae]me con|atenci[oó]n humana/i;
 
 export function matchesHandoffIntent(text: string): boolean {
   return HANDOFF_BACKUP_REGEX.test(text);
@@ -26,3 +26,27 @@ export function matchesHandoffIntent(text: string): boolean {
  */
 export const HANDOFF_BACKUP_ACK =
   "Claro, te comunico con una persona del equipo. En breve te responden.";
+
+/**
+ * Oferta de hablar con una persona: sale una vez por chat, tras la primera
+ * respuesta del bot. El texto pide «Sí o No» porque los botones solo existen
+ * en WhatsApp por Zernio; en los demás canales el cliente lo escribe.
+ * El turno reconoce la oferta por este texto exacto.
+ */
+export const OFERTA_HUMANO =
+  "¿Quieres hablar con una persona del equipo? Responde Sí o No.";
+export const OFERTA_BOTONES = ["Sí", "No"];
+export const OFERTA_NO_ACK = "Perfecto, sigo por aquí. ¿En qué más te ayudo?";
+
+/** El Sí/No a la oferta; null si el mensaje dice otra cosa y sigue el bot. */
+export function respuestaAOferta(text: string | null): "si" | "no" | null {
+  const t = (text ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z ]/gi, "")
+    .trim()
+    .toLowerCase();
+  if (/^(si|claro|dale)( por favor| quiero)?$/.test(t)) return "si";
+  if (/^no( gracias)?$/.test(t)) return "no";
+  return null;
+}

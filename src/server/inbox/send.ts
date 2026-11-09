@@ -347,6 +347,8 @@ export async function sendText(input: {
   organizationId: string;
   text: string;
   aiGenerated?: boolean;
+  /** Botones de respuesta. Solo WhatsApp por Zernio; los demás mandan el texto. */
+  botones?: string[];
 }): Promise<SendResult> {
   const target = await prepareSend(input.conversationId, input.organizationId);
   const { credentials } = target;
@@ -356,7 +358,7 @@ export async function sendText(input: {
     : target.messenger
       ? await callMessengerSend(target, input.text)
       : target.hiloZernio
-        ? await callZernioWhatsappSend(target, input.text)
+        ? await callZernioWhatsappSend(target, input.text, input.botones)
         : await callGraphSend(credentials!, {
             messaging_product: "whatsapp",
             ...target.destinatario!,
@@ -598,7 +600,8 @@ export async function sendStructured(
  */
 async function callZernioWhatsappSend(
   target: SendTarget,
-  text: string
+  text: string,
+  botones?: string[]
 ): Promise<string> {
   const creds = target.credentials!;
   try {
@@ -607,6 +610,7 @@ async function callZernioWhatsappSend(
       accountId: creds.accountRef,
       conversationId: target.hiloZernio!,
       text,
+      botones,
     });
     return res.platformMessageId;
   } catch (err) {

@@ -69,6 +69,8 @@ export type ZernioEvent = {
     conversationId?: string;
     direction?: string;
     text?: string | null;
+    /** WhatsApp: toque de un botón; `interactiveId` es su `payload`. */
+    metadata?: { interactiveId?: string | null } | null;
     /** Cuándo lo mandó la persona, ISO-8601. Ver `zernioSentAtSeconds`. */
     sentAt?: string;
     attachments?: {
@@ -179,6 +181,8 @@ export async function sendZernioMessage(input: {
   text: string;
   /** Fuera de la ventana de 24 h, la única etiqueta admitida. */
   humanAgentTag?: boolean;
+  /** Botones de respuesta; el `payload` es el rótulo, que vuelve al tocarlo. */
+  botones?: string[];
   idempotencyKey?: string;
 }): Promise<ZernioSendResult> {
   if (!input.conversationId) {
@@ -192,6 +196,13 @@ export async function sendZernioMessage(input: {
     accountId: input.accountId,
     message: input.text,
   };
+  if (input.botones?.length) {
+    body.buttons = input.botones.map((title) => ({
+      type: "postback",
+      title,
+      payload: title,
+    }));
+  }
   if (input.humanAgentTag) {
     body.messagingType = "MESSAGE_TAG";
     body.messageTag = "HUMAN_AGENT";
